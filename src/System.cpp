@@ -105,6 +105,8 @@ uint64_t dmaTime = 0;
 uint64_t ppuTime = 0;
 uint64_t apuTime = 0;
 uint64_t ctrlTime = 0;
+uint64_t otherTime = 0;
+uint64_t drawTime = 0;
 chrono::steady_clock::time_point frameTime;
 
 uint64_t emuStep = 0;
@@ -118,11 +120,12 @@ void emu()
     HTIMEL = 0xff;
     HTIMEH = 0x01;
     RDNMI = RDNMI & 0x7F;
-    pauseEmu = false;
+    pauseEmu = true;
     frameTime = chrono::steady_clock::now();
     while (true) // Emulation Loop
     {
 
+        
         if ((pauseEmu || ppu->pauseEmu) && !runStep && !runVBlank && !runInst && !runHBlank)
         {
             mfb_update_events(window);
@@ -132,7 +135,7 @@ void emu()
         if (!dma->dmaActive)
         {
 
-            if (emuStep % 8 == 0)
+            if (emuStep % 12 == 0)
             {
                 runInst = false;
                 if (debug)
@@ -205,7 +208,8 @@ void emu()
                 //         window_fb[y * WIN_WIDTH + x] = ppu->fb[(y / (WIN_WIDTH / FB_WIDTH)) * FB_WIDTH + (x / (WIN_WIDTH / FB_WIDTH))];
                 //     }
                 // }
-                auto start = chrono::steady_clock::now();
+                
+                start = chrono::steady_clock::now();
                 for (int sy = 0; sy < FB_HEIGHT; sy++)
                 {
                     int src_row_idx = sy * FB_WIDTH;
@@ -249,27 +253,37 @@ void emu()
                     }
                 }
 
-                
                 mfb_update_ex(window, window_fb, WIN_WIDTH, WIN_HEIGHT);
                 mfb_set_title(window, to_string(ppu->frameCount).c_str());
                 mfb_wait_sync(window);
                 auto end = chrono::steady_clock::now();
-                cout << "Window " << dec << chrono::duration_cast<std::chrono::milliseconds>(end - start).count() << endl;;
+                drawTime +=  chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
+                
 
-                cout << "==================TIMING================"<<endl;
-                cout << "Frame Time : " << dec << chrono::duration_cast<std::chrono::milliseconds>(chrono::steady_clock::now()-frameTime).count() << endl;
+                 start = chrono::steady_clock::now();
+                cout << "==================TIMING================" << endl;
+                cout << "Frame Time : " << dec << chrono::duration_cast<std::chrono::milliseconds>(chrono::steady_clock::now() - frameTime).count() << endl;
                 frameTime = chrono::steady_clock::now();
-                cout << "CPU Time : " << dec << cpuTime/1000000 <<  endl;
-                cout << "PPU Time : " << dec << ppuTime/1000000 <<  endl;
-                cout << "APU Time : " << dec << apuTime/1000000 <<  endl;
-                cout << "Ctrl Time : " << dec << ctrlTime/1000000 <<  endl;
-                cout << "DMA Time : " << dec << dmaTime/1000000 <<  endl;
+                cout << "CPU Time : " << dec << cpuTime / 1000000 << endl;
+                cout << "PPU Time : " << dec << ppuTime / 1000000 << endl;
+                cout << "APU Time : " << dec << apuTime / 1000000 << endl;
+                cout << "Ctrl Time : " << dec << ctrlTime / 1000000 << endl;
+                cout << "DMA Time : " << dec << dmaTime / 1000000 << endl;
+                cout << "Other Time : " << dec << otherTime / 1000000 << endl;
+                cout << "Draw Time : " << dec << drawTime / 1000000 << endl;
+                end = chrono::steady_clock::now();
+                cout << "Debug : " << dec << chrono::duration_cast<std::chrono::nanoseconds>(end - start).count()/1000000 << endl;
                 cpuTime = 0;
                 ppuTime = 0;
                 apuTime = 0;
                 ctrlTime = 0;
                 dmaTime = 0;
+                otherTime = 0;
+                drawTime = 0;
             }
+
+             start = chrono::steady_clock::now();
+
             if (ppu->vCounter == 261 && ppu->hCounter == 340) // End of VBlank
             {
                 RDNMI = 0b00000000;
@@ -310,6 +324,8 @@ void emu()
             default:
                 break;
             }
+             end = chrono::steady_clock::now();
+            otherTime += chrono::duration_cast<std::chrono::nanoseconds>(end - start).count();
         }
 
         emuStep++;
@@ -367,6 +383,7 @@ void keyboard_callback(struct mfb_window *window, mfb_key key, mfb_key_mod mod, 
         if (key == KB_KEY_O)
         {
             cout << "Mode : " << hex << (uint16)ppu->mode << endl;
+            cout << "DirCol : " << hex << (uint16)ppu->directColor << endl;
             cout << "force blnk : " << hex << (uint16)ppu->forceBlank << endl;
             cout << "fade : " << hex << (uint16)ppu->fadeValue << endl;
             cout << "h : " << hex << (uint16)ppu->hCounter << endl;

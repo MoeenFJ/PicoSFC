@@ -405,7 +405,6 @@ public:
         cregs.S = 0;
         cregs.X = 0;
         cregs.Y = 0;
-        
 
         reset();
     }
@@ -705,11 +704,11 @@ public:
 
         return ss.str();
     }
-    
+
     void cpuStep()
     {
         inst = ReadByte(((add24)cregs.K << 16) + (add24)cregs.PC);
-    
+
         switch (inst)
         {
 #pragma region IgnoredInstructions
@@ -3434,21 +3433,21 @@ public:
         case 0x44: // MVP
         {
             add24 srcB = ReadByte(PCByteAhead(2)) << 16;
-            add24 dstB = ReadByte(PCByteAhead(1)) << 16;
+
+            cregs.DBR = ReadByte(PCByteAhead(1)); // DBR = dest bank
+            add24 dstB = cregs.DBR << 16;
             add24 src, dest;
-            if (cregs.C != 0xFFFF)
-            {
-                src = srcB | cregs.X;
-                dest = dstB | cregs.Y;
-                WriteByte(dest, ReadByte(src));
-                UpdateX(cregs.X - 1);
-                UpdateY(cregs.Y - 1);
-                cregs.C -= 1;
-            }
+
+            src = srcB + cregs.X;
+            dest = dstB + cregs.Y;
+            WriteByte(dest, ReadByte(src));
+            UpdateX(cregs.X - 1);
+            UpdateY(cregs.Y - 1);
+            cregs.C -= 1;
 
             if (cregs.C == 0xFFFF)
             {
-                cregs.DBR = ReadByte(PCByteAhead(1)); // DBR = dest bank
+
                 cregs.PC += 3;
             }
             break;
@@ -3456,23 +3455,20 @@ public:
         case 0x54: // MVN
         {
             add24 srcB = ReadByte(PCByteAhead(2)) << 16;
-            add24 dstB = ReadByte(PCByteAhead(1)) << 16;
+            cregs.DBR = ReadByte(PCByteAhead(1)); // DBR = dest bank
+            add24 dstB = cregs.DBR << 16;
             add24 src, dest;
-            if (cregs.C != 0xFFFF)
-            {
-                src = srcB | cregs.X;
-                dest = dstB | cregs.Y;
-                // cout << "MVN : " << hex << src << " --> " << dest << " : " << hex << (uint16)ReadByte(src) << endl;
-                WriteByte(dest, ReadByte(src));
-                UpdateX(cregs.X + 1);
-                UpdateY(cregs.Y + 1);
 
-                cregs.C -= 1;
-            }
+            src = srcB + cregs.X;
+            dest = dstB + cregs.Y;
+            WriteByte(dest, ReadByte(src));
+            UpdateX(cregs.X + 1);
+            UpdateY(cregs.Y + 1);
+
+            cregs.C -= 1;
 
             if (cregs.C == 0xFFFF)
             {
-                cregs.DBR = ReadByte(PCByteAhead(1)); // DBR = dest bank
                 cregs.PC += 3;
             }
             break;
@@ -3485,12 +3481,13 @@ public:
             cregs.S = (cregs.S & 0x00FF) | 0x0100;
             flags.X = 1;
             flags.M = 1;
+            // cout << "emu is on for some reasons?!" << endl;
+            // cin.get();
         }
         if (flags.X)
         {
             cregs.X &= 0x00FF;
             cregs.Y &= 0x00FF;
         }
-      
     }
 };

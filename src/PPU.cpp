@@ -1036,7 +1036,7 @@ public:
                     uint8 y = (vCounter - objs[i].objY) & 0x07;
 
                     uint16 chr = objs[i].objChrName;
-                    chr += tileX + (tileY << 4);
+                    chr += (uint16)tileX + ((uint16)tileY << 4);
 
                     if (objs[i].objHF)
                         x = 7 - x;
@@ -1060,7 +1060,9 @@ public:
                         objopaque = true;
                     }
                     //cout << "=-=-=-=-=-=- OBJ[" << i << "] -=-=-=-=-=-=-=" << endl;
-                    //cout << "hCount " << hCounter << endl;
+                    //cout << "OBJChrTable1BaseAddr" << hex << (uint16) OBJChrTable1BaseAddr << endl;
+                    //cout << "OBJChrTable2BaseAddr" << hex << (uint16) OBJChrTable2BaseAddr << endl;
+                    //cout << "hCount "  << dec << hCounter << endl;
                     //cout << "vCount " << vCounter << endl;
                     //cout << "tileX " << (uint16)tileX << endl;
                     //cout << "tileY " << (uint16)tileY << endl;
@@ -1071,7 +1073,8 @@ public:
                     //cout << "objSize " << (uint16)objSize << endl;
                     //cout << "ojbprior " << (uint16)objs[i].objPrior << endl;
                     //cout << "x " << objs[i].objX << " y " << (uint16)objs[i].objY << endl;
-                    //cout << "Char " << chr << endl;
+                    //cout << "Char " << (uint16)objs[i].objChrName << endl;
+                    //cout << "TileChar " << (uint16)chr << endl;
                     //cout << "CharAddr " << hex << objCharAddr << endl;
                     //cout << "paletter " << dec << (uint16)objs[i].objClrPal << endl;
                 }
@@ -1181,8 +1184,8 @@ public:
                 int16_t C = mode7C;
                 int16_t D = mode7D;
 
-                uint16 transX = ((float)A / 256.f) * (hOffset - cx) + ((float)B / 256.f) * (vOffset - cy) + cx;
-                uint16 transY = ((float)C / 256.f) * (hOffset - cx) + ((float)D / 256.f) * (vOffset - cy) + cy;
+                uint16 transX = (A / 256.f) * ((int16_t)hOffset - cx) + (B / 256.f) * (vOffset - cy) + cx;
+                uint16 transY = (C / 256.f) * ((int16_t)hOffset - cx) + (D / 256.f) * (vOffset - cy) + cy;
 
                 hOffset = transX;
                 vOffset = transY;
@@ -1641,6 +1644,9 @@ public:
             else if (bgFilter == 5)
                 mainScreenCol = objcol;
 
+            //if(mode == 7)
+            //    mainScreenCol = 0;
+
             int16_t mainR = ((mainScreenCol & 0b0000000000011111) >> 0);
             int16_t mainG = ((mainScreenCol & 0b0000001111100000) >> 5);
             int16_t mainB = ((mainScreenCol & 0b0111110000000000) >> 10);
@@ -1679,6 +1685,7 @@ public:
 
             mainB = (mainB << 3);
             mainB = fade > mainB ? 0 : (mainB - fade);
+
 
             // cout << "RGB : (" << dec << (unsigned int)R << "," << (unsigned int)G << "," << (unsigned int)B << ")" << endl;
 
