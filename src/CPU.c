@@ -5,8 +5,9 @@ typedef unsigned char uint8;
 typedef unsigned short uint16;
 typedef unsigned int add24;
 
-class FlagsRegister
+namespace CPU
 {
+
     const uint8_t flagNMask = 0b10000000;
     const uint8_t flagVMask = 0b01000000;
     const uint8_t flagMMask = 0b00100000;
@@ -15,113 +16,58 @@ class FlagsRegister
     const uint8_t flagIMask = 0b00000100;
     const uint8_t flagZMask = 0b00000010;
     const uint8_t flagCMask = 0b00000001;
-
-public:
-    bool N;
-    bool V;
-    bool M;
-    bool X;
-    bool D;
-    bool I;
-    bool Z;
-    bool C;
-    FlagsRegister()
+    struct FlagsRegister
     {
-        N = V = M = X = D = I = Z = C = 0;
-    }
+        bool N;
+        bool V;
+        bool M;
+        bool X;
+        bool D;
+        bool I;
+        bool Z;
+        bool C;
+    };
 
-    void SetMask(uint8_t mask)
+    struct CPURegisters
     {
-        N = (mask & flagNMask) ? 1 : N;
-        V = (mask & flagVMask) ? 1 : V;
-        M = (mask & flagMMask) ? 1 : M;
-        X = (mask & flagXMask) ? 1 : X;
-        D = (mask & flagDMask) ? 1 : D;
-        I = (mask & flagIMask) ? 1 : I;
-        Z = (mask & flagZMask) ? 1 : Z;
-        C = (mask & flagCMask) ? 1 : C;
-    }
-    void ResetMask(uint8_t mask)
+        uint16 C;  // accumulator 16 bit
+        uint8 DBR; // data bank register 8 bit
+        uint16 D;  // Direct 16 bit
+        uint8 K;   // Program Bank 8 bit
+        uint16 PC; // PC 16 bit
+        uint16 S;  // Stack 16 bit
+        uint16 X;  // X 16 bit
+        uint16 Y;  // Y 16 bit
+    };
+
+    enum CPUAddressingMode
     {
-        // cout << "Reset Mask : " << std::bitset<8>(mask) << endl;
-        N = (mask & flagNMask) ? 0 : N;
-        V = (mask & flagVMask) ? 0 : V;
-        M = (mask & flagMMask) ? 0 : M;
-        X = (mask & flagXMask) ? 0 : X;
-        D = (mask & flagDMask) ? 0 : D;
-        I = (mask & flagIMask) ? 0 : I;
-        Z = (mask & flagZMask) ? 0 : Z;
-        C = (mask & flagCMask) ? 0 : C;
-    }
+        Abs = 0,
+        AbsX = 1,
+        AbsY = 2,
+        AbsPtr16 = 3,
+        AbsPtr24 = 4,
+        AbsXPtr16 = 5,
 
-    operator uint8_t() const
-    {
-        return (N ? flagNMask : 0) | (V ? flagVMask : 0) | (M ? flagMMask : 0) | (X ? flagXMask : 0) | (D ? flagDMask : 0) | (I ? flagIMask : 0) | (Z ? flagZMask : 0) | (C ? flagCMask : 0);
-    }
+        Dir = 6,
+        DirX = 7,
+        DirY = 8,
+        DirPtr16 = 9,
+        DirPtr24 = 10,
+        DirXPtr16 = 11,
+        DirPtr16Y = 12,
+        DirPtr24Y = 13,
 
-    FlagsRegister &operator=(const uint8_t &bits)
-    {
-        N = bits & flagNMask;
-        V = bits & flagVMask;
-        M = bits & flagMMask;
-        X = bits & flagXMask;
-        D = bits & flagDMask;
-        I = bits & flagIMask;
-        Z = bits & flagZMask;
-        C = bits & flagCMask;
-        return *this;
-    }
-};
+        Imm = 14,
+        Long = 15,
+        LongX = 16,
+        Rel8 = 17,
+        Rel16 = 18,
+        SrcDst = 19,
+        STK = 20,
+        STKPtr16Y = 21
+    };
 
-struct CPURegisters
-{
-    uint16 C;  // accumulator 16 bit
-    uint8 DBR; // data bank register 8 bit
-    uint16 D;  // Direct 16 bit
-    uint8 K;   // Program Bank 8 bit
-    uint16 PC; // PC 16 bit
-    uint16 S;  // Stack 16 bit
-    uint16 X;  // X 16 bit
-    uint16 Y;  // Y 16 bit
-};
-
-using C65ReadByteFunc_t = uint8 (*)(add24);
-using C65WriteByteFunc_t = void (*)(add24, uint8);
-
-enum class CPUAddressingMode
-{
-    Abs = 0,
-    AbsX = 1,
-    AbsY = 2,
-    AbsPtr16 = 3,
-    AbsPtr24 = 4,
-    AbsXPtr16 = 5,
-
-    Dir = 6,
-    DirX = 7,
-    DirY = 8,
-    DirPtr16 = 9,
-    DirPtr24 = 10,
-    DirXPtr16 = 11,
-    DirPtr16Y = 12,
-    DirPtr24Y = 13,
-
-    Imm = 14,
-    Long = 15,
-    LongX = 16,
-    Rel8 = 17,
-    Rel16 = 18,
-    SrcDst = 19,
-    STK = 20,
-    STKPtr16Y = 21
-};
-class CPU
-{
-
-    C65ReadByteFunc_t ReadByte;
-    C65WriteByteFunc_t WriteByte;
-
-public:
     FlagsRegister flags; // Status Reg
     CPURegisters cregs;
     bool flagE;
@@ -135,34 +81,34 @@ public:
 
     uint16 ReadWord()
     {
-        uint16 low = ReadByte(addL);
-        uint16 high = ReadByte(addH);
+        uint16 low = C65Read(addL);
+        uint16 high = C65Read(addH);
         return (high << 8) | low;
     }
     void WriteWord(uint16 data)
     {
-        WriteByte(addL, data & 0x00FF);
-        WriteByte(addH, data >> 8);
+        C65Write(addL, data & 0x00FF);
+        C65Write(addH, data >> 8);
     }
 
     uint16 ReadWordAt(add24 add)
     {
-        uint16 low = ReadByte(add);
-        uint16 high = ReadByte(add + 1);
+        uint16 low = C65Read(add);
+        uint16 high = C65Read(add + 1);
         return (high << 8) | low;
     }
     void WriteWordAt(add24 add, uint16 data)
     {
-        WriteByte(add, data & 0x00FF);
-        WriteByte(add + 1, data >> 8);
+        C65Write(add, data & 0x00FF);
+        C65Write(add + 1, data >> 8);
     }
 
     void ResolveAddress(CPUAddressingMode mode)
     {
         uint8 ll, hh, xh;
-        ll = ReadByte(PCByteAhead(1));
-        hh = ReadByte(PCByteAhead(2));
-        xh = ReadByte(PCByteAhead(3));
+        ll = C65Read(PCByteAhead(1));
+        hh = C65Read(PCByteAhead(2));
+        xh = C65Read(PCByteAhead(3));
 
         // Phase one
         switch (mode)
@@ -262,21 +208,21 @@ public:
         {
         case CPUAddressingMode::AbsXPtr16:
         case CPUAddressingMode::AbsPtr16:
-            addL = (cregs.K << 16) | (ReadByte(addH) << 8) | ReadByte(addL);
+            addL = (cregs.K << 16) | (C65Read(addH) << 8) | C65Read(addL);
             break;
 
         case CPUAddressingMode::DirPtr16:
         case CPUAddressingMode::DirXPtr16:
         case CPUAddressingMode::DirPtr16Y:
         case CPUAddressingMode::STKPtr16Y:
-            addL = (cregs.DBR << 16) | (ReadByte(addH) << 8) | ReadByte(addL);
+            addL = (cregs.DBR << 16) | (C65Read(addH) << 8) | C65Read(addL);
             addH = addL + 1;
             break;
 
         case CPUAddressingMode::AbsPtr24:
         case CPUAddressingMode::DirPtr24:
         case CPUAddressingMode::DirPtr24Y:
-            addL = (ReadByte(addXH) << 16) | (ReadByte(addH) << 8) | ReadByte(addL);
+            addL = (C65Read(addXH) << 16) | (C65Read(addH) << 8) | C65Read(addL);
             addH = addL + 1;
 
         default:
@@ -303,7 +249,7 @@ public:
     void WriteM(uint16 d)
     {
         if (flags.M)
-            WriteByte(addL, d);
+            C65Write(addL, d);
         else
             WriteWord(d);
     }
@@ -311,7 +257,7 @@ public:
     void WriteX(uint16 d)
     {
         if (flags.X)
-            WriteByte(addL, d);
+            C65Write(addL, d);
         else
             WriteWord(d);
     }
@@ -319,7 +265,7 @@ public:
     uint16 ReadM()
     {
         if (flags.M)
-            return ReadByte(addL);
+            return C65Read(addL);
         else
             return ReadWord();
     }
@@ -327,7 +273,7 @@ public:
     uint16 ReadX()
     {
         if (flags.X)
-            return ReadByte(addL);
+            return C65Read(addL);
         else
             return ReadWord();
     }
@@ -370,33 +316,33 @@ public:
 
     void Push(uint8 d)
     {
-        WriteByte(cregs.S, d);
+        C65Write(cregs.S, d);
         cregs.S -= 1;
     }
     void PushWord(uint16 d)
     {
         cregs.S -= 1;
-        WriteByte(cregs.S, d & 0x00ff);
-        WriteByte(cregs.S + 1, (d & 0xff00) >> 8);
+        C65Write(cregs.S, d & 0x00ff);
+        C65Write(cregs.S + 1, (d & 0xff00) >> 8);
         cregs.S -= 1;
     }
     uint8 Pop()
     {
         cregs.S += 1;
-        return ReadByte(cregs.S);
+        return C65Read(cregs.S);
     }
     uint16 PopWord()
     {
         cregs.S += 1;
-        uint16 val = ReadByte(cregs.S + 1) << 8 | ReadByte(cregs.S);
+        uint16 val = C65Read(cregs.S + 1) << 8 | C65Read(cregs.S);
         cregs.S += 1;
         return val;
     }
 
-    CPU(C65ReadByteFunc_t readfunc, C65WriteByteFunc_t writefunc)
+    // Interrupts
+    void reset()
     {
-        this->ReadByte = readfunc;
-        this->WriteByte = writefunc;
+        uint16 rstVector = ReadWordAt(0x00FFFC);
         cregs.C = 0;
         cregs.DBR = 0;
         cregs.D = 0;
@@ -405,14 +351,6 @@ public:
         cregs.S = 0;
         cregs.X = 0;
         cregs.Y = 0;
-
-        reset();
-    }
-
-    // Interrupts
-    void reset()
-    {
-        uint16 rstVector = ReadWordAt(0x00FFFC);
         flagE = 1;
         flags.M = 1;
         flags.X = 1;
@@ -423,7 +361,7 @@ public:
         cregs.D = 0;
         cregs.DBR = 0;
         cregs.PC = rstVector;
-        inst = ReadByte(((add24)cregs.K << 16) + (add24)cregs.PC);
+        inst = C65Read(((add24)cregs.K << 16) + (add24)cregs.PC);
     }
 
     void invokeNMI()
@@ -432,7 +370,9 @@ public:
         if (!flagE)
             Push(cregs.K);
         PushWord(cregs.PC);
-        Push(flags);
+        uint8 t = (flags.N ? flagNMask : 0) | (flags.V ? flagVMask : 0) | (flags.M ? flagMMask : 0) | (flags.X ? flagXMask : 0) | (flags.D ? flagDMask : 0) | (flags.I ? flagIMask : 0) | (flags.Z ? flagZMask : 0) | (flags.C ? flagCMask : 0);
+
+        Push(t);
 
         uint16 nmi;
         cregs.K = 0;
@@ -441,7 +381,7 @@ public:
         else
             nmi = ReadWordAt(0x00FFEA);
         cregs.PC = nmi;
-        inst = ReadByte(((add24)cregs.K << 16) + (add24)cregs.PC);
+        inst = C65Read(((add24)cregs.K << 16) + (add24)cregs.PC);
     }
 
     void setOverflow()
@@ -458,7 +398,9 @@ public:
         if (!flagE)
             Push(cregs.K);  // 8 Bit
         PushWord(cregs.PC); // 16 Bit
-        Push(flags);        // 8 Bit
+        uint8 t = (flags.N ? flagNMask : 0) | (flags.V ? flagVMask : 0) | (flags.M ? flagMMask : 0) | (flags.X ? flagXMask : 0) | (flags.D ? flagDMask : 0) | (flags.I ? flagIMask : 0) | (flags.Z ? flagZMask : 0) | (flags.C ? flagCMask : 0);
+
+        Push(t); // 8 Bit
 
         uint16 irq;
         cregs.K = 0;
@@ -467,7 +409,7 @@ public:
         else
             irq = ReadWordAt(0x00FFEE);
         cregs.PC = irq;
-        inst = ReadByte(((add24)cregs.K << 16) + (add24)cregs.PC);
+        inst = C65Read(((add24)cregs.K << 16) + (add24)cregs.PC);
     }
 
     void doADC(uint16 d)
@@ -659,7 +601,7 @@ public:
         cout << "N V M X D I Z C    E" << endl;
         cout << flags.N << " " << flags.V << " " << flags.M << " " << flags.X << " " << flags.D << " " << flags.I << " " << flags.Z << " " << flags.C << "    " << flagE << endl;
         cout << "-----------Regs----------" << endl;
-        cout << "Stack top : " << hex << (unsigned int)ReadByte(cregs.S + 1) << " " << (unsigned int)ReadByte(cregs.S + 2) << endl;
+        cout << "Stack top : " << hex << (unsigned int)C65Read(cregs.S + 1) << " " << (unsigned int)C65Read(cregs.S + 2) << endl;
         cout << "C : " << std::hex << (unsigned int)cregs.C << endl;
         cout << "DBR : " << std::hex << (unsigned int)cregs.DBR << endl;
         cout << "D : " << std::hex << (unsigned int)cregs.D << endl;
@@ -671,9 +613,9 @@ public:
         add24 instAddress = ((add24)cregs.K << 16) + (add24)cregs.PC;
 
         cout << "InstAddress : " << std::hex << instAddress << endl;
-        uint8_t inst = ReadByte(instAddress);
+        uint8_t inst = C65Read(instAddress);
         cout << "OpCode : " << std::hex << (int)inst << endl;
-        cout << "3 Bytes Ahead : " << std::hex << (int)ReadByte(instAddress + 1) << " " << std::hex << (int)ReadByte(instAddress + 2) << " " << std::hex << (int)ReadByte(instAddress + 3) << " " << endl;
+        cout << "3 Bytes Ahead : " << std::hex << (int)C65Read(instAddress + 1) << " " << std::hex << (int)C65Read(instAddress + 2) << " " << std::hex << (int)C65Read(instAddress + 3) << " " << endl;
     }
 
     string stringStatus()
@@ -685,7 +627,7 @@ public:
         ss << "N V M X D I Z C    E" << endl;
         ss << flags.N << " " << flags.V << " " << flags.M << " " << flags.X << " " << flags.D << " " << flags.I << " " << flags.Z << " " << flags.C << "    " << flagE << endl;
         ss << "-----------Regs----------" << endl;
-        ss << "Stack top : " << hex << (unsigned int)ReadByte(cregs.S + 1) << " " << (unsigned int)ReadByte(cregs.S + 2) << endl;
+        ss << "Stack top : " << hex << (unsigned int)C65Read(cregs.S + 1) << " " << (unsigned int)C65Read(cregs.S + 2) << endl;
 
         ss << "C : " << std::hex << (unsigned int)cregs.C << endl;
         ss << "DBR : " << std::hex << (unsigned int)cregs.DBR << endl;
@@ -698,16 +640,16 @@ public:
         add24 instAddress = ((add24)cregs.K << 16) + (add24)cregs.PC;
 
         ss << "InstAddress : " << std::hex << instAddress << endl;
-        uint8_t inst = ReadByte(instAddress);
+        uint8_t inst = C65Read(instAddress);
         ss << "OpCode : " << std::hex << (int)inst << endl;
-        ss << "3 Bytes Ahead : " << std::hex << (int)ReadByte(instAddress + 1) << " " << std::hex << (int)ReadByte(instAddress + 2) << " " << std::hex << (int)ReadByte(instAddress + 3) << " " << endl;
+        ss << "3 Bytes Ahead : " << std::hex << (int)C65Read(instAddress + 1) << " " << std::hex << (int)C65Read(instAddress + 2) << " " << std::hex << (int)C65Read(instAddress + 3) << " " << endl;
 
         return ss.str();
     }
 
     void cpuStep()
     {
-        inst = ReadByte(((add24)cregs.K << 16) + (add24)cregs.PC);
+        inst = C65Read(((add24)cregs.K << 16) + (add24)cregs.PC);
 
         switch (inst)
         {
@@ -803,16 +745,34 @@ public:
         case 0xc2: // REP imm - Reset selected Flags
         {
             ResolveAddress(CPUAddressingMode::Imm);
-            uint8 imm = ReadByte(addL);
-            flags.ResetMask(imm);
+            uint8 imm = C65Read(addL);
+
+            flags.N = (imm & flagNMask) ? 0 : flags.N;
+            flags.V = (imm & flagVMask) ? 0 : flags.V;
+            flags.M = (imm & flagMMask) ? 0 : flags.M;
+            flags.X = (imm & flagXMask) ? 0 : flags.X;
+            flags.D = (imm & flagDMask) ? 0 : flags.D;
+            flags.I = (imm & flagIMask) ? 0 : flags.I;
+            flags.Z = (imm & flagZMask) ? 0 : flags.Z;
+            flags.C = (imm & flagCMask) ? 0 : flags.C;
+
             cregs.PC += 2;
             break;
         }
         case 0xe2: // SEP imm - Set selected Flags
         {
             ResolveAddress(CPUAddressingMode::Imm);
-            uint8 imm = ReadByte(addL);
-            flags.SetMask(imm);
+            uint8 imm = C65Read(addL);
+
+            flags.N = (imm & flagNMask) ? 1 : flags.N;
+            flags.V = (imm & flagVMask) ? 1 : flags.V;
+            flags.M = (imm & flagMMask) ? 1 : flags.M;
+            flags.X = (imm & flagXMask) ? 1 : flags.X;
+            flags.D = (imm & flagDMask) ? 1 : flags.D;
+            flags.I = (imm & flagIMask) ? 1 : flags.I;
+            flags.Z = (imm & flagZMask) ? 1 : flags.Z;
+            flags.C = (imm & flagCMask) ? 1 : flags.C;
+
             cregs.PC += 2;
             break;
         }
@@ -822,8 +782,8 @@ public:
 
         case 0x08: // PHP
         {
-
-            Push(flags);
+            uint8 t = (flags.N ? flagNMask : 0) | (flags.V ? flagVMask : 0) | (flags.M ? flagMMask : 0) | (flags.X ? flagXMask : 0) | (flags.D ? flagDMask : 0) | (flags.I ? flagIMask : 0) | (flags.Z ? flagZMask : 0) | (flags.C ? flagCMask : 0);
+            Push(t);
             // No Flags
             // cout << "PHP : " << hex << (uint16)flags << endl;
             // cin.get();
@@ -938,7 +898,14 @@ public:
         case 0x28: // PLP
         {
             uint8 d = Pop();
-            flags = d;
+            flags.N = d & flagNMask;
+            flags.V = d & flagVMask;
+            flags.M = d & flagMMask;
+            flags.X = d & flagXMask;
+            flags.D = d & flagDMask;
+            flags.I = d & flagIMask;
+            flags.Z = d & flagZMask;
+            flags.C = d & flagCMask;
 
             cregs.PC += 1;
             // cout << "new flags " << (uint16)flags << endl;
@@ -3252,7 +3219,7 @@ public:
         case 0x90: // BCC
         {
             ResolveAddress(CPUAddressingMode::Rel8);
-            signed char ll = ReadByte(addL);
+            signed char ll = C65Read(addL);
             if (!flags.C)
                 cregs.PC += ll;
             cregs.PC += 2;
@@ -3261,7 +3228,7 @@ public:
         case 0xB0: // BCS
         {
             ResolveAddress(CPUAddressingMode::Rel8);
-            signed char ll = ReadByte(addL);
+            signed char ll = C65Read(addL);
             if (flags.C)
                 cregs.PC += ll;
             cregs.PC += 2;
@@ -3270,7 +3237,7 @@ public:
         case 0xd0: // BNE rel8
         {
             ResolveAddress(CPUAddressingMode::Rel8);
-            signed char ll = ReadByte(addL);
+            signed char ll = C65Read(addL);
             if (!flags.Z)
                 cregs.PC += ll;
             cregs.PC += 2;
@@ -3279,7 +3246,7 @@ public:
         case 0x10: // BPL rel8
         {
             ResolveAddress(CPUAddressingMode::Rel8);
-            signed char ll = ReadByte(addL);
+            signed char ll = C65Read(addL);
             if (!flags.N)
                 cregs.PC += ll;
             cregs.PC += 2;
@@ -3288,14 +3255,14 @@ public:
         case 0x80: // BRA rel8
         {
             ResolveAddress(CPUAddressingMode::Rel8);
-            signed char ll = ReadByte(addL);
+            signed char ll = C65Read(addL);
             cregs.PC += 2 + ll;
             break;
         }
         case 0xf0: // BEQ rel8
         {
             ResolveAddress(CPUAddressingMode::Rel8);
-            signed char ll = ReadByte(addL);
+            signed char ll = C65Read(addL);
             if (flags.Z)
                 cregs.PC += ll;
             cregs.PC += 2;
@@ -3305,7 +3272,7 @@ public:
         case 0x30: // BMI
         {
             ResolveAddress(CPUAddressingMode::Rel8);
-            signed char ll = ReadByte(addL);
+            signed char ll = C65Read(addL);
             if (flags.N)
                 cregs.PC += ll;
             cregs.PC += 2;
@@ -3314,7 +3281,7 @@ public:
         case 0x70: // BVS rel8
         {
             ResolveAddress(CPUAddressingMode::Rel8);
-            signed char ll = ReadByte(addL);
+            signed char ll = C65Read(addL);
             if (flags.V)
                 cregs.PC += ll;
             cregs.PC += 2;
@@ -3323,7 +3290,7 @@ public:
         case 0x50: // BVC rel8
         {
             ResolveAddress(CPUAddressingMode::Rel8);
-            signed char ll = ReadByte(addL);
+            signed char ll = C65Read(addL);
             if (!flags.V)
                 cregs.PC += ll;
             cregs.PC += 2;
@@ -3423,7 +3390,15 @@ public:
         }
         case 0x40: // RTI
         {
-            flags = Pop();
+            uint8 t = Pop();
+            flags.N = t & flagNMask;
+            flags.V = t & flagVMask;
+            flags.M = t & flagMMask;
+            flags.X = t & flagXMask;
+            flags.D = t & flagDMask;
+            flags.I = t & flagIMask;
+            flags.Z = t & flagZMask;
+            flags.C = t & flagCMask;
             cregs.PC = PopWord();
             if (!flagE)
                 cregs.K = Pop();
@@ -3432,15 +3407,15 @@ public:
 
         case 0x44: // MVP
         {
-            add24 srcB = ReadByte(PCByteAhead(2)) << 16;
+            add24 srcB = C65Read(PCByteAhead(2)) << 16;
 
-            cregs.DBR = ReadByte(PCByteAhead(1)); // DBR = dest bank
+            cregs.DBR = C65Read(PCByteAhead(1)); // DBR = dest bank
             add24 dstB = cregs.DBR << 16;
             add24 src, dest;
 
             src = srcB + cregs.X;
             dest = dstB + cregs.Y;
-            WriteByte(dest, ReadByte(src));
+            C65Write(dest, C65Read(src));
             UpdateX(cregs.X - 1);
             UpdateY(cregs.Y - 1);
             cregs.C -= 1;
@@ -3454,14 +3429,14 @@ public:
         }
         case 0x54: // MVN
         {
-            add24 srcB = ReadByte(PCByteAhead(2)) << 16;
-            cregs.DBR = ReadByte(PCByteAhead(1)); // DBR = dest bank
+            add24 srcB = C65Read(PCByteAhead(2)) << 16;
+            cregs.DBR = C65Read(PCByteAhead(1)); // DBR = dest bank
             add24 dstB = cregs.DBR << 16;
             add24 src, dest;
 
             src = srcB + cregs.X;
             dest = dstB + cregs.Y;
-            WriteByte(dest, ReadByte(src));
+            C65Write(dest, C65Read(src));
             UpdateX(cregs.X + 1);
             UpdateY(cregs.Y + 1);
 

@@ -14,6 +14,15 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(minifb)
 
-add_executable(MTOFCS ./src/System.cpp)
+add_executable(MTOFCS ./src/System.c
+   ./src/SPC700.c
+   ./src/CPU.c
+   ./src/PPU.c
+   ./src/DMA.c
+   ./src/APU.c
+   ./src/MDU.c
+   ./src/Cartridge.c
+   ./src/CTRL.c
+)
 
 target_link_libraries(MTOFCS PRIVATE minifb)

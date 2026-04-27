@@ -1,28 +1,29 @@
 #include <bits/stdc++.h>
 #include "json.hpp"
-#include "../src/SPC700.cpp"
+#include "../src/SPC700.h"
+
 using namespace std;
 using json = nlohmann::json;
 
-SPC700 *cpu;
 
 uint8 ram[64 * 1024] = {0};
 
-uint8 SPC700Read(uint16 address)
+uint8 SPCRead(uint16 address)
 {
     cout << "addrees : " << hex << address << endl;
     return ram[address];
 }
-void SPC700Write(uint16 address, uint8 data)
+void SPCWrite(uint16 address, uint8 data)
 {
     cout << "addrees : " << hex << address << endl;
     ram[address] = data;
 }
 
+
 int main(int argc, char *argv[])
 {
 
-    cpu = new SPC700(SPC700Read, SPC700Write);
+
 
     uint16 inst = 0x00;
     bool once = false;
@@ -48,12 +49,12 @@ int main(int argc, char *argv[])
         for (const auto &tv : tvs)
         {
 
-            cpu->PC = (uint16)tv["initial"]["pc"];
-            cpu->SP = (uint8)tv["initial"]["sp"];
-            cpu->flags = (uint8)tv["initial"]["psw"];
-            cpu->A = (uint8)tv["initial"]["a"];
-            cpu->X = (uint16)tv["initial"]["x"];
-            cpu->Y = (uint16)tv["initial"]["y"];
+            regs.PC = (uint16)tv["initial"]["pc"];
+            regs.SP = (uint8)tv["initial"]["sp"];
+            SPC700_SetFlagsAsByte((uint8)tv["initial"]["psw"]);
+            regs.A = (uint8)tv["initial"]["a"];
+            regs.X = (uint16)tv["initial"]["x"];
+            regs.Y = (uint16)tv["initial"]["y"];
 
             for (const auto &ram_entry : tv["initial"]["ram"])
             {
@@ -62,45 +63,45 @@ int main(int argc, char *argv[])
                 ram[address] = value;
                 cout << "Set " << hex << address << " to " << (uint16)value << endl;
             }
-            cpu->PrintState();
+            //cpu->PrintState();
             // Apply
-            cpu->Step();
+            SPC700_Step();
 
             // Check
             bool passed = true;
-            if (cpu->PC != (uint16)tv["final"]["pc"])
+            if (regs.PC != (uint16)tv["final"]["pc"])
             {
                 cout << "PC Should be : " << hex << (uint16)tv["final"]["pc"] << endl;
                 passed = false;
             }
 
-            if (cpu->SP != (uint8)tv["final"]["sp"])
+            if (regs.SP != (uint8)tv["final"]["sp"])
             {
                 cout << "S Should be : " << hex << (uint16)tv["final"]["sp"] << endl;
                 passed = false;
             }
 
             uint8 expFlags = (uint8)tv["final"]["psw"];
-            if (cpu->flags != expFlags)
+            if (SPC700_GetFlagsAsByte() != expFlags)
             {
                 cout << "flags Should be : " << hex << (uint16)tv["final"]["psw"] << endl;
-                cout << "flags are : " << hex << (uint16)cpu->flags << endl;
+                cout << "flags are : " << hex << (uint16)SPC700_GetFlagsAsByte() << endl;
                 passed = false;
             }
 
-            if (cpu->A != (uint8)tv["final"]["a"])
+            if (regs.A != (uint8)tv["final"]["a"])
             {
                 cout << "A Should be : " << hex << (uint16)tv["final"]["a"] << endl;
                 passed = false;
             }
 
-            if (cpu->X != (uint8)tv["final"]["x"])
+            if (regs.X != (uint8)tv["final"]["x"])
             {
                 cout << "X Should be : " << hex << (uint16)tv["final"]["x"] << endl;
                 passed = false;
             }
 
-            if (cpu->Y != (uint8)tv["final"]["y"])
+            if (regs.Y != (uint8)tv["final"]["y"])
             {
                 cout << "Y Should be : " << hex << (uint16)tv["final"]["y"] << endl;
                 passed = false;
@@ -120,7 +121,7 @@ int main(int argc, char *argv[])
             if (!passed)
             {
                 cout << "ERROR!!!" << endl;
-                cpu->PrintState();
+                //cpu->PrintState();
                 cin.get();
             }
             else

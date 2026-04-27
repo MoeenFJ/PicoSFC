@@ -1,4 +1,3 @@
-#include <bits/stdc++.h>
 #include <MiniFB.h>
 #include <chrono>
 
@@ -8,20 +7,21 @@ typedef unsigned char uint8;
 typedef unsigned short uint16;
 typedef unsigned int add24;
 
-#include "Cartridge.cpp"
-#include "PPU.cpp"
-#include "APU.cpp"
-#include "CPU.cpp"
-#include "DMA.cpp"
-#include "CTRL.cpp"
-#include "MDUnit.cpp"
+uint8 C65Read(add24 address);
+void C65Write(add24 address, uint8 data);
+
+uint8 DMARead(add24 address);
+void DMAWrite(add24 address, uint8 data);
+
+#include "Cartridge.h"
+#include "PPU.h"
+#include "APU.h"
+#include "CPU.h"
+#include "DMA.h"
+#include "CTRL.h"
+#include "MDUnit.h"
 
 
-CPU *cpu;
-
-DMA *dma;
-MDUnit *mdu;
-ControllerSystem *ctrlsys;
 
 uint8 zeroWire = 0;
 uint8 ram[128 * 1024] = {0};
@@ -42,11 +42,7 @@ uint8 WMADDH; // 0x2183
 
 uint8 RDNMI;
 
-uint8 C65Read(add24 address);
-void C65Write(add24 address, uint8 data);
 
-uint8 DMARead(add24 address);
-void DMAWrite(add24 address, uint8 data);
 
 uint8 BusAccess(add24 address, uint8 data, bool rd);
 
@@ -112,9 +108,9 @@ chrono::steady_clock::time_point frameTime;
 uint64_t emuStep = 0;
 void emu()
 {
-    cpu->reset();
+    CPU::reset();
     PPU::reset();
-    APU::Init();
+    APU_Init();
     VTIMEL = 0xff;
     VTIMEH = 0x01;
     HTIMEL = 0xff;
@@ -131,7 +127,7 @@ void emu()
             continue;
         }
 
-        if (!dma->dmaActive)
+        if (!DMA::dmaActive)
         {
 
             if (emuStep % 8 == 0)
@@ -139,19 +135,19 @@ void emu()
                 runInst = false;
                 if (debug)
                 {
-                    cpu->printStatus();
+                    CPU::printStatus();
                 }
                 if (cpuTrace)
                 {
-                    cpuTraceFile << cpu->stringStatus() << endl;
+                    cpuTraceFile << CPU::stringStatus() << endl;
                 }
 
                 auto start = chrono::steady_clock::now();
-                cpu->cpuStep();
+                CPU::cpuStep();
 
                 auto end = chrono::steady_clock::now();
                 cpuTime += chrono::duration_cast<std::chrono::nanoseconds>(end - start).count();
-                // if(cpu->cregs.PC == 0xfa88 && cpu->cregs.K == 0x09)
+                // if(CPU::cregs.PC == 0xfa88 && CPU::cregs.K == 0x09)
                 //     pauseEmu = true;
             }
         }
@@ -159,7 +155,7 @@ void emu()
         if (emuStep % 2 == 0)
         {
             auto start = chrono::steady_clock::now();
-            dma->step(!hdmaRan);
+            DMA::step(!hdmaRan);
             auto end = chrono::steady_clock::now();
             dmaTime += chrono::duration_cast<std::chrono::nanoseconds>(end - start).count();
             if (!hdmaRan)
@@ -171,7 +167,7 @@ void emu()
         if (emuStep % 6 == 0)
         {
             auto start = chrono::steady_clock::now();
-            APU::Step();
+            APU_Step();
             auto end = chrono::steady_clock::now();
             apuTime += chrono::duration_cast<std::chrono::nanoseconds>(end - start).count();
         }
@@ -180,7 +176,7 @@ void emu()
         if (emuStep % 2 == 0)
         {
             auto start = chrono::steady_clock::now();
-            ctrlsys->step();
+            ControllerSystem::step();
             auto end = chrono::steady_clock::now();
             ctrlTime += chrono::duration_cast<std::chrono::nanoseconds>(end - start).count();
         }
@@ -194,12 +190,12 @@ void emu()
 
         if (PPU::hCounter == 0 && PPU::vCounter == 225) // Start of VBlank
         {
-            // dma->HDMAEN = 0;
+          
             vBlankEntryMoment = true;
             runVBlank = false;
             RDNMI = 0b10000000;
             if (NMITIMEN & 0b10000000) // NMI is enabled
-                cpu->invokeNMI();
+                CPU::invokeNMI();
 
             // for (int y = 0; y < FB_HEIGHT * (WIN_WIDTH / FB_WIDTH); y++)
             // {
@@ -294,7 +290,7 @@ void emu()
         }
         if (PPU::hCounter == 0 && PPU::vCounter == 0) // Start of Frame
         {
-            dma->initializeHDMA();
+            DMA::initializeHDMA();
         }
 
         // H-V Timer IRQ
@@ -307,17 +303,17 @@ void emu()
         case 1:
             TIMEUP = 0b10000000;
             if ((HTIMEH << 8 | HTIMEL) == PPU::hCounter)
-                cpu->invokeIRQ();
+                CPU::invokeIRQ();
             break;
         case 2:
             TIMEUP = 0b10000000;
             if ((VTIMEH << 8 | VTIMEL) == PPU::vCounter && PPU::hCounter == 0)
-                cpu->invokeIRQ();
+                CPU::invokeIRQ();
             break;
         case 3:
             TIMEUP = 0b10000000;
             if ((VTIMEH << 8 | VTIMEL) == PPU::vCounter && PPU::hCounter == (HTIMEH << 8 | HTIMEL))
-                cpu->invokeIRQ();
+                CPU::invokeIRQ();
             break;
 
         default:
@@ -359,307 +355,80 @@ void keyboard_callback(struct mfb_window *window, mfb_key key, mfb_key_mod mod, 
             pauseEmu = !pauseEmu;
             PPU::pauseEmu = pauseEmu;
         }
-        if (key == KB_KEY_1)
-        {
-            debug = !debug;
-            cout << "Debug : " << (debug ? "true" : "false") << endl;
-        }
-        if (key == KB_KEY_9)
-        {
-            runStep = true;
-        }
-        if (key == KB_KEY_0)
-        {
-            cout << "Mode : " << hex << (uint16)PPU::mode << endl;
-            cout << "BG1Base : " << hex << (uint16)PPU::BG1BaseAddr << endl;
-            cout << "BG1ChrBase : " << hex << (uint16)PPU::BG1ChrsBaseAddr << endl;
-            cout << "BG2Base : " << hex << (uint16)PPU::BG2BaseAddr << endl;
-            cout << "BG2ChrBase : " << hex << (uint16)PPU::BG2ChrsBaseAddr << endl;
-            runVBlank = true;
-        }
-        if (key == KB_KEY_O)
-        {
-            cout << "Mode : " << hex << (uint16)PPU::mode << endl;
-            cout << "DirCol : " << hex << (uint16)PPU::directColor << endl;
-            cout << "force blnk : " << hex << (uint16)PPU::forceBlank << endl;
-            cout << "fade : " << hex << (uint16)PPU::fadeValue << endl;
-            cout << "h : " << hex << (uint16)PPU::hCounter << endl;
-            cout << "v : " << hex << (uint16)PPU::vCounter << endl;
-            cout << "hBlank : " << hex << (uint16)PPU::hBlank << endl;
-            cout << "vBlank : " << hex << (uint16)PPU::vBlank << endl;
-            cout << "VMAINC : " << hex << (uint16)PPU::VMAINC << endl;
-
-            cout << "OBJChrTable1BaseAddr : " << hex << (uint16)PPU::OBJChrTable1BaseAddr << endl;
-            cout << "OBJChrTable2BaseAddr : " << hex << (uint16)PPU::OBJChrTable2BaseAddr << endl;
-
-            cout << "Add Sub : " << hex << (uint16)PPU::addSub << endl;
-
-            cout << "BG1 MS EN : " << hex << PPU::BG1onMainScreen << endl;
-            cout << "BG1Base : " << hex << (uint16)PPU::BG1BaseAddr << endl;
-            cout << "BG1ChrBase : " << hex << (uint16)PPU::BG1ChrsBaseAddr << endl;
-
-            cout << "BG2 MS EN : " << hex << PPU::BG2onMainScreen << endl;
-            cout << "BG2Base : " << hex << (uint16)PPU::BG2BaseAddr << endl;
-            cout << "BG2ChrBase : " << hex << (uint16)PPU::BG2ChrsBaseAddr << endl;
-            cout << "BG2Scroll : (" << hex << PPU::BG2HScroll << "," << PPU::BG2VScroll << ")" << endl;
-        }
-        if (key == KB_KEY_MINUS)
-        {
-            runInst = true;
-        }
-        if (key == KB_KEY_EQUAL)
-        {
-            runHBlank = true;
-        }
-        if (key == KB_KEY_2)
-        {
-            cout << "Ram Dumped" << endl;
-            DumpRam();
-        }
-        if (key == KB_KEY_4)
-        {
-            cout << "VRam Dumped" << endl;
-            DumpVRam();
-        }
-        if (key == KB_KEY_3)
-        {
-            cpuTrace = !cpuTrace;
-            cout << "Trace : " << (cpuTrace ? "true" : "false") << endl;
-        }
-        if (key == KB_KEY_5)
-        {
-            cout << "OARam Dumped" << endl;
-            DumpOARam();
-        }
-        if (key == KB_KEY_F1)
-        {
-            PPU::bgFilter = 1;
-        }
-        if (key == KB_KEY_F2)
-        {
-            PPU::bgFilter = 2;
-        }
-        if (key == KB_KEY_F3)
-        {
-            PPU::bgFilter = 3;
-        }
-        if (key == KB_KEY_F4)
-        {
-            PPU::bgFilter = 4;
-        }
-        if (key == KB_KEY_F5)
-        {
-            PPU::bgFilter = 5;
-        }
-        if (key == KB_KEY_F6)
-        {
-            PPU::bgFilter = 0;
-        }
     }
     // Controller
     if (key == KB_KEY_Z)
     {
         if (is_pressed)
-            ctrlsys->KeyPress(15); // B
+            ControllerSystem::KeyPress(15); // B
         else
-            ctrlsys->KeyRelease(15);
+            ControllerSystem::KeyRelease(15);
     }
     if (key == KB_KEY_X)
     {
         if (is_pressed)
-            ctrlsys->KeyPress(7); // A
+            ControllerSystem::KeyPress(7); // A
         else
-            ctrlsys->KeyRelease(7);
+            ControllerSystem::KeyRelease(7);
     }
     if (key == KB_KEY_A)
     {
         if (is_pressed)
-            ctrlsys->KeyPress(14); // Y
+            ControllerSystem::KeyPress(14); // Y
         else
-            ctrlsys->KeyRelease(14);
+            ControllerSystem::KeyRelease(14);
     }
     if (key == KB_KEY_S)
     {
         if (is_pressed)
-            ctrlsys->KeyPress(6); // X
+            ControllerSystem::KeyPress(6); // X
         else
-            ctrlsys->KeyRelease(6);
+            ControllerSystem::KeyRelease(6);
     }
     if (key == KB_KEY_SPACE)
     {
         if (is_pressed)
-            ctrlsys->KeyPress(12); // Start
+            ControllerSystem::KeyPress(12); // Start
         else
-            ctrlsys->KeyRelease(12);
+            ControllerSystem::KeyRelease(12);
     }
     if (key == KB_KEY_ENTER)
     {
         if (is_pressed)
-            ctrlsys->KeyPress(13); // Start
+            ControllerSystem::KeyPress(13); // Start
         else
-            ctrlsys->KeyRelease(13);
+            ControllerSystem::KeyRelease(13);
     }
     if (key == KB_KEY_LEFT)
     {
         if (is_pressed)
-            ctrlsys->KeyPress(9); // Left
+            ControllerSystem::KeyPress(9); // Left
         else
-            ctrlsys->KeyRelease(9);
+            ControllerSystem::KeyRelease(9);
     }
     if (key == KB_KEY_RIGHT)
     {
         if (is_pressed)
-            ctrlsys->KeyPress(8); // Right
+            ControllerSystem::KeyPress(8); // Right
         else
-            ctrlsys->KeyRelease(8);
+            ControllerSystem::KeyRelease(8);
     }
     if (key == KB_KEY_UP)
     {
         if (is_pressed)
-            ctrlsys->KeyPress(11); // UP
+            ControllerSystem::KeyPress(11); // UP
         else
-            ctrlsys->KeyRelease(11);
+            ControllerSystem::KeyRelease(11);
     }
     if (key == KB_KEY_DOWN)
     {
         if (is_pressed)
-            ctrlsys->KeyPress(10); // Down
+            ControllerSystem::KeyPress(10); // Down
         else
-            ctrlsys->KeyRelease(10);
+            ControllerSystem::KeyRelease(10);
     }
 }
 
-void mouse_btn_callback(struct mfb_window *window, mfb_mouse_button button, mfb_key_mod mod, bool is_pressed)
-{
-    if (is_pressed)
-    {
-        mouseX /= (WIN_WIDTH / FB_WIDTH);
-        mouseY /= (WIN_WIDTH / FB_WIDTH);
-        uint16 vCounter = mouseY;
-        uint16 hCounter = mouseX;
-        uint16 objcol;
-        uint8 ojbprior = 0;
-        bool objopaque;
-        cout << "Clicked at : (" << dec << mouseX << "," << mouseY << ")" << endl;
-        for (int i = 0; i < 128; i++)
-        {
-            uint8 shftAmnt = ((i & 0b00000111) << 1);
-            uint8 objY = (PPU::oam[i << 1] & 0xff00) >> 8;
-            int16_t objX = (PPU::oam[i << 1] & 0x00ff);
-            bool xSign = PPU::oam[256 + (i >> 3)] & (0x01 << shftAmnt);
-            objX |= xSign ? 0xFF00 : 0x0000;
-
-            bool objSizeFlag = (PPU::oam[256 + (i >> 3)] & (0x02 << shftAmnt));
-
-            uint8 objSize = 8;
-            switch (PPU::objAvailSize)
-            {
-            case 0:
-                objSize = objSizeFlag ? 16 : 8;
-                break;
-            case 1:
-                objSize = objSizeFlag ? 32 : 8;
-                break;
-            case 2:
-                objSize = objSizeFlag ? 64 : 8;
-                break;
-            case 3:
-                objSize = objSizeFlag ? 32 : 16;
-                break;
-            case 4:
-                objSize = objSizeFlag ? 64 : 16;
-                break;
-            case 5:
-                objSize = objSizeFlag ? 64 : 32;
-                break;
-
-            default:
-                break;
-            }
-
-            if (vCounter < objY || vCounter >= objY + objSize || hCounter < objX || hCounter >= objX + objSize) // Point not in obj then go to next
-            {
-                continue;
-            }
-
-            uint16 dt = PPU::oam[(i << 1) + 1];
-            uint16 chr = dt & 0x00ff;
-            bool table = dt & 0x0100;
-            uint8 pal = (dt & 0b0000111000000000) >> 9;
-            uint8 prior = (dt & 0b0011000000000000) >> 12;
-            bool vf = dt & 0b1000000000000000;
-            bool hf = dt & 0b0100000000000000;
-
-            // 00 01 101 110001100
-            // 00 11 000 000000000
-
-            uint8 colorIdx = 0;
-
-            uint8 tileX = (hCounter - objX) >> 3;
-            uint8 tileY = (vCounter - objY) >> 3;
-            if (hf)
-                tileX = ((objSize >> 3) - 1) - tileX;
-            if (vf)
-                tileY = ((objSize >> 3) - 1) - tileY;
-
-            uint8 x = (hCounter - objX) & 0x07;
-            uint8 y = (vCounter - objY) & 0x07;
-
-            chr += tileX + (tileY << 4);
-
-            if (hf)
-                x = 7 - x;
-            if (vf)
-                y = 7 - y;
-
-            uint16 objCharAddr = (table ? PPU::OBJChrTable2BaseAddr : PPU::OBJChrTable1BaseAddr) + (chr << 4); // Obj size later plays a part in here
-
-            colorIdx |= ((PPU::vram[objCharAddr + y] >> (7 - x)) & 0x01);
-
-            colorIdx |= ((PPU::vram[objCharAddr + y] >> (15 - x)) & 0x01) << 1;
-
-            colorIdx |= ((PPU::vram[objCharAddr + y + 8] >> (7 - x)) & 0x01) << 2;
-
-            colorIdx |= ((PPU::vram[objCharAddr + y + 8] >> (15 - x)) & 0x01) << 3;
-
-            if (prior >= ojbprior && colorIdx != 0)
-            {
-                ojbprior = prior;
-                objcol = PPU::cgram[0b10000000 | (pal << 4) | colorIdx];
-                objopaque = true;
-            }
-
-            if (objopaque)
-            {
-                cout << "=-=-=-=-=-=- OBJ[" << i << "] -=-=-=-=-=-=-=" << endl;
-                cout << "objData at " << dec << (256 + (i >> 3)) << " : " << hex << PPU::oam[256 + (i >> 3)] << endl;
-                cout << "hCount " << mouseX << endl;
-                cout << "vCount " << mouseY << endl;
-                cout << "dt " << hex << dt << endl;
-                cout << "tileX " << (uint16)tileX << endl;
-                cout << "tileY " << (uint16)tileY << endl;
-                cout << "colorIdx " << (uint16)colorIdx << endl;
-                cout << "objCol " << (uint16)objcol << endl;
-                cout << "objGlobalSize " << (uint16)PPU::objAvailSize << endl;
-                cout << "objSizeFlag " << (uint16)objSizeFlag << endl;
-                cout << "objSize " << (uint16)objSize << endl;
-                cout << "ojbprior " << (uint16)prior << endl;
-                cout << "vCount " << mouseY << endl;
-                cout << "x " << objX << " y " << (uint16)objY << endl;
-                cout << "Char " << chr << endl;
-                cout << "CharAddr " << hex << objCharAddr << endl;
-                cout << "paletter " << dec << (uint16)pal << endl;
-                // cin.get();
-            }
-        }
-    }
-}
-
-void mouse_move_callback(struct mfb_window *window, int x, int y)
-{
-    mouseX = x;
-    mouseY = y;
-}
 
 void WriteIO(add24 address, uint8 data)
 {
@@ -673,27 +442,27 @@ void WriteIO(add24 address, uint8 data)
     }
     else if (port >= 0x2140 && port <= 0x2143) // APU
     {
-        APU::IOWrite(port, data);
+        APU_IOWrite(port, data);
         return;
     }
     else if (port >= 0x2144 && port <= 0x217F) // APU Mirrored
     {
-        APU::IOWrite(0x2140 | (port & 0x03), data);
+        APU_IOWrite(0x2140 | (port & 0x03), data);
         return;
     }
     else if (port >= 0x4300 && port <= 0x437a) // DMA
     {
-        dma->IOWrite(port, data);
+        DMA::IOWrite(port, data);
         return;
     }
     else if (port >= 0x4218 && port <= 0x421F) // Controller
     {
-        ctrlsys->IOWrite(port, data);
+        ControllerSystem::IOWrite(port, data);
         return;
     }
     else if (port >= 0x4202 && port <= 0x4206)
     {
-        mdu->IOWrite(port, data);
+        MDU::IOWrite(port, data);
         return;
     }
     else
@@ -725,16 +494,16 @@ void WriteIO(add24 address, uint8 data)
             break;
 
         case 0x4016: // LCTRLREG1, Manual controller 1
-            ctrlsys->IOWrite(port, data);
+            ControllerSystem::IOWrite(port, data);
             break;
 
         case 0x4200: // NMITIMEN
             NMITIMEN = data;
-            ctrlsys->stdCtrlEn = data & 0x01;
+            ControllerSystem::stdCtrlEn = data & 0x01;
 
             break;
         case 0x4201: // WRIO
-            ctrlsys->IOWrite(port, data);
+            ControllerSystem::IOWrite(port, data);
             break;
 
         case 0x4207:
@@ -752,12 +521,12 @@ void WriteIO(add24 address, uint8 data)
 
         case 0x420b: // MDMAEN
 
-            dma->IOWrite(port, data);
+            DMA::IOWrite(port, data);
             break;
 
         case 0x420c: // HDMAEN
 
-            dma->IOWrite(port, data);
+            DMA::IOWrite(port, data);
             break;
 
         // TODO : implement actual memory speed here
@@ -785,28 +554,28 @@ uint8 ReadIO(add24 address)
     if (port >= 0x2100 && port <= 0x213F) // PPU
     {
         if (port == 0x2137)
-            cpu->setOverflow();
+            CPU::setOverflow();
         return PPU::IORead(port);
     }
     else if (port >= 0x2140 && port <= 0x2143) // APU
     {
-        return APU::IORead(port);
+        return APU_IORead(port);
     }
     else if (port >= 0x2144 && port <= 0x217F) // APU Mirrored
     {
-        return APU::IORead(0x2140 | (port & 0x03));
+        return APU_IORead(0x2140 | (port & 0x03));
     }
     else if (port >= 0x4300 && port <= 0x437a) // DMA
     {
-        return dma->IORead(port);
+        return DMA::IORead(port);
     }
     else if (port >= 0x4218 && port <= 0x421F) // Controller
     {
-        return ctrlsys->IORead(port);
+        return ControllerSystem::IORead(port);
     }
     else if (port >= 0x4214 && port <= 0x4217)
     {
-        return mdu->IORead(port);
+        return MDU::IORead(port);
     }
     else
     {
@@ -825,10 +594,10 @@ uint8 ReadIO(add24 address)
         }
 
         case 0x4016: // LCTRLREG1, Manual controller 1
-            return ctrlsys->IORead(port);
+            return ControllerSystem::IORead(port);
             break;
         case 0x4017: // LCTRLREG2, Manual controller 1
-            return ctrlsys->IORead(port);
+            return ControllerSystem::IORead(port);
             break;
 
         case 0x4212: // HVBJOY
@@ -836,7 +605,7 @@ uint8 ReadIO(add24 address)
             break;
 
         case 0x4213: // RDIO
-            return ctrlsys->IORead(port);
+            return ControllerSystem::IORead(port);
             break;
 
         case 0x4210: // RDNMI
@@ -1109,19 +878,14 @@ int main(int argc, char *argv[])
         sramFile.close();
     }
 
-    cpu = new CPU(C65Read, C65Write);
 
-    dma = new DMA(DMARead, DMAWrite);
-    mdu = new MDUnit();
-    ctrlsys = new ControllerSystem();
 
-    cpuTraceFile = ofstream("CPUTrace.txt");
+
 
     window = mfb_open_ex("MTOSFC", WIN_WIDTH, WIN_HEIGHT, NULL);
     mfb_set_target_fps(240);  
     mfb_set_keyboard_callback(window, keyboard_callback);
-    mfb_set_mouse_button_callback(window, mouse_btn_callback);
-    mfb_set_mouse_move_callback(window, mouse_move_callback);
+
     zeroWire = 0;
 
     emu();

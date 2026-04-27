@@ -6,9 +6,8 @@ typedef unsigned char uint8;
 typedef unsigned short uint16;
 typedef unsigned int add24;
 
-class MDUnit
+namespace MDU
 {
-    public:
     uint8 WRMPYA; // 0X4202
     uint8 WRMPYB; // 0X4203
     uint8 WRDIVL; // 0X4204
