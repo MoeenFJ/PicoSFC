@@ -149,8 +149,11 @@ void emu()
 
                 auto start = chrono::steady_clock::now();
                 cpu->cpuStep();
+
                 auto end = chrono::steady_clock::now();
                 cpuTime += chrono::duration_cast<std::chrono::nanoseconds>(end - start).count();
+                //if(cpu->cregs.PC == 0xfa88 && cpu->cregs.K == 0x09)
+                //    pauseEmu = true;
             }
         }
 

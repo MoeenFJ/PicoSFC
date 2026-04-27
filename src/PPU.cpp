@@ -215,6 +215,7 @@ public:
     uint16 mode7D = 0;
     uint16 centerX = 0;
     uint16 centerY = 0;
+    uint8 mode7Old = 0;
 
     bool mode7AHL = false;
     bool mode7BHL = false;
@@ -258,7 +259,7 @@ public:
 
     void doMult()
     {
-        int32_t mult = (int16_t)mode7A * (int8_t)(mode7B & 0x00FF);
+        int32_t mult = (int16_t)mode7A * (int8_t)((mode7B >> 8));
         regs.MPYL = mult & 0x000000FF;
         regs.MPYM = (mult & 0x0000FF00) >> 8;
         regs.MPYH = (mult & 0x00FF0000) >> 16;
@@ -503,8 +504,8 @@ public:
                     else
                     {
                         objs[idx].objChrTable = data & 0b00000001;
-                        objs[idx].objClrPal = (data & 0b00001110)>>1;
-                        objs[idx].objPrior = (data & 0b00110000)>>4;
+                        objs[idx].objClrPal = (data & 0b00001110) >> 1;
+                        objs[idx].objPrior = (data & 0b00110000) >> 4;
                         objs[idx].objHF = data & 0b01000000;
                         objs[idx].objVF = data & 0b10000000;
                     }
@@ -585,28 +586,32 @@ public:
             break;
 
         case 0x210D:           // BG1H0FS
-            if (!BG1HScrollHL) // Low
-            {
-                BG1HScroll = (BG1HScroll & 0xFF00) | data;
-                BG1HScrollHL = true;
-            }
-            else // High
-            {
-                BG1HScroll = (BG1HScroll & 0x00FF) | (data << 8);
-                BG1HScrollHL = false;
-            }
+            //if (!BG1HScrollHL) // Low
+            //{
+            //    BG1HScroll = (BG1HScroll & 0xFF00) | data;
+            //    BG1HScrollHL = true;
+            //}
+            //else // High
+            //{
+            //    BG1HScroll = (BG1HScroll & 0x00FF) | (data << 8);
+            //    BG1HScrollHL = false;
+            //}
+            BG1HScroll = (data << 8) | mode7Old;
+            mode7Old = data;
             break;
         case 0x210E:           // BG1V0FS
-            if (!BG1VScrollHL) // Low
-            {
-                BG1VScroll = (BG1VScroll & 0xFF00) | data;
-                BG1VScrollHL = true;
-            }
-            else // High
-            {
-                BG1VScroll = (BG1VScroll & 0x00FF) | (data << 8);
-                BG1VScrollHL = false;
-            }
+            //if (!BG1VScrollHL) // Low
+            //{
+            //    BG1VScroll = (BG1VScroll & 0xFF00) | data;
+            //    BG1VScrollHL = true;
+            //}
+            //else // High
+            //{
+            //    BG1VScroll = (BG1VScroll & 0x00FF) | (data << 8);
+            //    BG1VScrollHL = false;
+            //}
+            BG1VScroll = (data << 8) | mode7Old;
+            mode7Old = data;
             break;
 
         case 0X210F:           // BG2H0FS
@@ -723,83 +728,46 @@ public:
             this->regs.M7SEL = data;
             break;
 
-        case 0x211B:       // M7A
-            if (!mode7AHL) // Low
-            {
-                mode7A = (mode7A & 0xFF00) | data;
-                mode7AHL = true;
-            }
-            else // High
-            {
-                mode7A = (mode7A & 0x00FF) | (data << 8);
-                mode7AHL = false;
-            }
+        case 0x211B: // M7A
+            // if (!mode7AHL) // Low
+            //{
+            //     mode7A = (mode7A & 0xFF00) | data;
+            //     mode7AHL = true;
+            // }
+            // else // High
+            //{
+            //     mode7A = (mode7A & 0x00FF) | (data << 8);
+            //     mode7AHL = false;
+            // }
+            mode7A = (data << 8) | mode7Old;
+            mode7Old = data;
             break;
 
-        case 0x211C:       // M7B
-            if (!mode7BHL) // Low
-            {
-                mode7B = (mode7B & 0xFF00) | data;
-                mode7BHL = true;
-                doMult();
-            }
-            else // High
-            {
-                mode7B = (mode7B & 0x00FF) | (data << 8);
-                mode7BHL = false;
-            }
+        case 0x211C: // M7B
+            mode7B = (data << 8) | mode7Old;
+            mode7Old = data;
+            doMult();
+
             break;
 
-        case 0x211D:       // M7C
-            if (!mode7CHL) // Low
-            {
-                mode7C = (mode7C & 0xFF00) | data;
-                mode7CHL = true;
-            }
-            else // High
-            {
-                mode7C = (mode7C & 0x00FF) | (data << 8);
-                mode7CHL = false;
-            }
+        case 0x211D: // M7C
+            mode7C = (data << 8) | mode7Old;
+            mode7Old = data;
             break;
 
-        case 0x211E:       // M7D
-            if (!mode7DHL) // Low
-            {
-                mode7D = (mode7D & 0xFF00) | data;
-                mode7DHL = true;
-            }
-            else // High
-            {
-                mode7D = (mode7D & 0x00FF) | (data << 8);
-                mode7DHL = false;
-            }
+        case 0x211E: // M7D
+            mode7D = (data << 8) | mode7Old;
+            mode7Old = data;
             break;
 
-        case 0x211F:        // M7X
-            if (!centerXHL) // Low
-            {
-                centerX = (centerX & 0xFF00) | data;
-                centerXHL = true;
-            }
-            else // High
-            {
-                centerX = (centerX & 0x00FF) | (data << 8);
-                centerXHL = false;
-            }
+        case 0x211F: // M7X
+            centerX = (data << 8) | mode7Old;
+            mode7Old = data;
             break;
 
-        case 0x2120:        // M7Y
-            if (!centerYHL) // Low
-            {
-                centerY = (centerY & 0xFF00) | data;
-                centerYHL = true;
-            }
-            else // High
-            {
-                centerY = (centerY & 0x00FF) | (data << 8);
-                centerYHL = false;
-            }
+        case 0x2120: // M7Y
+            centerY = (data << 8) | mode7Old;
+            mode7Old = data;
             break;
 
         case 0x2121: // CGADD
@@ -1059,24 +1027,24 @@ public:
                         objcol = cgram[0b10000000 | (objs[i].objClrPal << 4) | colorIdx];
                         objopaque = true;
                     }
-                    //cout << "=-=-=-=-=-=- OBJ[" << i << "] -=-=-=-=-=-=-=" << endl;
-                    //cout << "OBJChrTable1BaseAddr" << hex << (uint16) OBJChrTable1BaseAddr << endl;
-                    //cout << "OBJChrTable2BaseAddr" << hex << (uint16) OBJChrTable2BaseAddr << endl;
-                    //cout << "hCount "  << dec << hCounter << endl;
-                    //cout << "vCount " << vCounter << endl;
-                    //cout << "tileX " << (uint16)tileX << endl;
-                    //cout << "tileY " << (uint16)tileY << endl;
-                    //cout << "colorIdx " << (uint16)colorIdx << endl;
-                    //cout << "objCol " << (uint16)objcol << endl;
-                    //cout << "objGlobalSize " << (uint16)objAvailSize << endl;
-                    //cout << "objSizeFlag " << (uint16)objSizeFlag << endl;
-                    //cout << "objSize " << (uint16)objSize << endl;
-                    //cout << "ojbprior " << (uint16)objs[i].objPrior << endl;
-                    //cout << "x " << objs[i].objX << " y " << (uint16)objs[i].objY << endl;
-                    //cout << "Char " << (uint16)objs[i].objChrName << endl;
-                    //cout << "TileChar " << (uint16)chr << endl;
-                    //cout << "CharAddr " << hex << objCharAddr << endl;
-                    //cout << "paletter " << dec << (uint16)objs[i].objClrPal << endl;
+                    // cout << "=-=-=-=-=-=- OBJ[" << i << "] -=-=-=-=-=-=-=" << endl;
+                    // cout << "OBJChrTable1BaseAddr" << hex << (uint16) OBJChrTable1BaseAddr << endl;
+                    // cout << "OBJChrTable2BaseAddr" << hex << (uint16) OBJChrTable2BaseAddr << endl;
+                    // cout << "hCount "  << dec << hCounter << endl;
+                    // cout << "vCount " << vCounter << endl;
+                    // cout << "tileX " << (uint16)tileX << endl;
+                    // cout << "tileY " << (uint16)tileY << endl;
+                    // cout << "colorIdx " << (uint16)colorIdx << endl;
+                    // cout << "objCol " << (uint16)objcol << endl;
+                    // cout << "objGlobalSize " << (uint16)objAvailSize << endl;
+                    // cout << "objSizeFlag " << (uint16)objSizeFlag << endl;
+                    // cout << "objSize " << (uint16)objSize << endl;
+                    // cout << "ojbprior " << (uint16)objs[i].objPrior << endl;
+                    // cout << "x " << objs[i].objX << " y " << (uint16)objs[i].objY << endl;
+                    // cout << "Char " << (uint16)objs[i].objChrName << endl;
+                    // cout << "TileChar " << (uint16)chr << endl;
+                    // cout << "CharAddr " << hex << objCharAddr << endl;
+                    // cout << "paletter " << dec << (uint16)objs[i].objClrPal << endl;
                 }
             }
 
@@ -1644,8 +1612,8 @@ public:
             else if (bgFilter == 5)
                 mainScreenCol = objcol;
 
-            //if(mode == 7)
-            //    mainScreenCol = 0;
+            // if(mode == 7)
+            //     mainScreenCol = 0;
 
             int16_t mainR = ((mainScreenCol & 0b0000000000011111) >> 0);
             int16_t mainG = ((mainScreenCol & 0b0000001111100000) >> 5);
@@ -1685,7 +1653,6 @@ public:
 
             mainB = (mainB << 3);
             mainB = fade > mainB ? 0 : (mainB - fade);
-
 
             // cout << "RGB : (" << dec << (unsigned int)R << "," << (unsigned int)G << "," << (unsigned int)B << ")" << endl;
 

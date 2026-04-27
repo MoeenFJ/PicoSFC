@@ -30,7 +30,7 @@ class MDUnit
         case 0X4203:
         {
             WRMPYB = data;
-            uint16 c = WRMPYA*WRMPYB;
+            uint16 c = (uint16)WRMPYA*(uint16)WRMPYB;
             RDMPYL = c;
             RDMPYH = c>>8;
             break;
