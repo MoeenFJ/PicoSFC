@@ -270,7 +270,7 @@ public:
             }
             else
             {
-                /*
+                
                 if (line == 0x80)
                 {
                     dmaLineCnt[i] = 128;
@@ -281,8 +281,8 @@ public:
                     dmaLineCnt[i] = line & 0b11111111;
                     dmaCont[i] = line & 0b10000000;
                 }
-                    */
-                dmaLineCnt[i] = line;
+                    
+                //dmaLineCnt[i] = line;
 
                 hdmaDoTransfer[i] = true;
             }
@@ -468,7 +468,7 @@ public:
                 }
 
                 dmaLineCnt[i] -= 1;
-                hdmaDoTransfer[i] = dmaLineCnt[i] & 0b10000000;
+                hdmaDoTransfer[i] = dmaCont[i];//dmaLineCnt[i] & 0b10000000;
 
                 if (dmaLineCnt[i] == 0) // Re-initialize for the next table
                 {
@@ -481,7 +481,7 @@ public:
                     }
                     else
                     {
-                        /*
+                        
                         if (line == 0x80)
                         {
                             dmaLineCnt[i] = 128;
@@ -492,8 +492,8 @@ public:
                             dmaLineCnt[i] = line & 0b11111111;
                             dmaCont[i] = line & 0b10000000;
                         }
-                        */
-                        dmaLineCnt[i] = line;
+                        
+                        //dmaLineCnt[i] = line;
 
                         hdmaDoTransfer[i] = true;
                     }

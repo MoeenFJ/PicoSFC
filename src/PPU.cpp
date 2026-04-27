@@ -6,104 +6,6 @@ typedef unsigned char uint8;
 typedef unsigned short uint16;
 typedef unsigned int add24;
 
-struct PPURegs
-{
-    uint8 INIDISP; // 0x2100 INITIAL SETTINGS FOR SCREEN
-
-    uint8 OBJSEL; // 0x2101 OBJ SIZE AND DATA AREA DESIGNATION
-
-    uint8 OAMADDL; // 0x2102
-    uint8 OAMADDH; // 0x2103 OAM ADDRESS
-    uint8 OAMDATA; // 0x2104 : Write, 0x2138 : Read
-
-    uint8 BGMODE; // 0x2105
-
-    uint8 MOSAIC; // 0x2106
-
-    uint8 BG1SC; // 0x2107
-    uint8 BG2SC; // 0x2108
-    uint8 BG3SC; // 0x2109
-    uint8 BG4SC; // 0x210A
-
-    uint8 BG12NBA; // 0x210B
-    uint8 BG34NBA; // 0x210C
-
-    uint8 BG1H0FS; // 0x210D
-    uint8 BG1V0FS; // 0x210E
-
-    uint8 BG2H0FS; // 0X210F
-    uint8 BG2V0FS; // 0X2110
-    uint8 BG3H0FS; // 0X2111
-    uint8 BG3V0FS; // 0X2112
-    uint8 BG4H0FS; // 0X2113
-    uint8 BG4V0FS; // 0X2114
-
-    uint8 VMAINC; // 0X2115
-
-    uint8 VMADDL; // 0x2116
-    uint8 VMADDH; // 0x2117
-
-    uint8 VMDATAL; // 0x2118
-    uint8 VMDATAH; // 0x2119
-
-    // Mode 7
-    uint8 M7SEL; // 0x211A
-    uint8 M7A;   // 0x211B Rotation
-    uint8 M7B;   // 0x211C Enlargement
-    uint8 M7C;   // 0x211D Reduction, Center, Multiplicand
-    uint8 M7D;   // 0x211E Multiplier settings
-    uint8 M7X;   // 0x211F Operand
-    uint8 M7Y;   // 0x2120 Operand
-
-    uint8 CGADD;  // 0x2121
-    uint8 CGDATA; // 0x2122
-
-    uint8 W12SEL;  // 0x2123
-    uint8 W34SEL;  // 0x2124
-    uint8 WOBJSEL; // 0x2125
-
-    uint8 WH0; // 0x2126
-    uint8 WH1; // 0x2127
-    uint8 WH2; // 0x2128
-    uint8 WH3; // 0x2129
-
-    uint8 WBGLOG;  // 0x212A
-    uint8 WOBJLOG; // 0x212B
-
-    uint8 TM; // 0x212C
-
-    uint8 TS; // 0x212D
-
-    uint8 TMW; // 0x212E
-
-    uint8 TSW; // 0x212F
-
-    uint8 CGSWSEL; // 0x2130
-
-    uint8 CGADSUB; // 0x2131
-
-    uint8 COLDATA; // 0x2132
-
-    uint8 SETINI; // 0x2133
-
-    uint8 MPYL; // 0x2134
-    uint8 MPYM; // 0x2135
-    uint8 MPYH; // 0x2136
-
-    uint8 SLHV; // 0x2137
-
-    // The following might get merged with the write regs
-    uint8 OAMDATA_READ; // 0x2138
-    uint8 VMDATAL_READ; // 0x2139
-    uint8 VMDATAH_READ; // 0x213A
-    uint8 CGDATA_READ;  // 0x213B
-
-    uint8 OPHCT; // 0x213C
-    uint8 OPVCT; // 0x213D
-
-    uint8 STAT77; // 0x213E
-    uint8 STAT78; // 0x213F
-};
 const int FB_WIDTH = 256;
 const int FB_HEIGHT = 224;
 
@@ -121,13 +23,10 @@ struct Object
     bool objVF;
 };
 
-class PPU
+namespace PPU
 {
 
-public:
     uint32_t fb[FB_WIDTH * FB_HEIGHT];
-
-    PPURegs regs;
 
     // VRam
     uint16 vram[32 * 1024] = {0};
@@ -216,6 +115,8 @@ public:
     uint16 centerX = 0;
     uint16 centerY = 0;
     uint8 mode7Old = 0;
+    int32_t mult = 0;
+    uint8 M7SEL;
 
     bool mode7AHL = false;
     bool mode7BHL = false;
@@ -252,45 +153,27 @@ public:
     uint8 bgFilter = 0;
     bool pauseEmu = false;
 
-    uint16 VRAMRead(uint16 add)
-    {
-        return vram[TranslateVRAMAddress(add & 0x7FFF)];
-    }
+    uint8 VMAINC = 0;
+    uint8 OPHCT = 0;
+    uint8 OPVCT = 0;
+    uint8 MOSAIC = 0;
 
-    void doMult()
-    {
-        int32_t mult = (int16_t)mode7A * (int8_t)((mode7B >> 8));
-        regs.MPYL = mult & 0x000000FF;
-        regs.MPYM = (mult & 0x0000FF00) >> 8;
-        regs.MPYH = (mult & 0x00FF0000) >> 16;
-    }
+    // Window
+    uint8 TMW;
+    uint8 TSW;
+    uint8 W12SEL;
+    uint8 W34SEL;
+    uint8 WOBJSEL;
+    uint8 WH0;
+    uint8 WH1;
+    uint8 WH2;
+    uint8 WH3;
+    uint8 WBGLOG;
+    uint8 WOBJLOG;
 
-    void IncVMADD()
-    {
-        uint8 inc = regs.VMAINC & 0b00000011;
-        switch (inc)
-        {
-        case 0:
-            vramPtr += 1;
-            break;
-        case 1:
-            vramPtr += 32;
-            break;
-        case 2:
-            vramPtr += 128;
-            break;
-        case 3:
-            vramPtr += 128;
-            break;
-        default:
-
-            break;
-        }
-        vramPtr &= 0x7FFF; // Bit 15 of vram address is ignored.
-    }
     uint16 TranslateVRAMAddress(uint16 addr)
     {
-        uint8 translation = (regs.VMAINC >> 2) & 0b00000011;
+        uint8 translation = (VMAINC >> 2) & 0b00000011;
         uint16 mappedAddr = addr;
 
         switch (translation)
@@ -318,6 +201,40 @@ public:
         return mappedAddr;
     }
 
+    uint16 VRAMRead(uint16 add)
+    {
+        return vram[TranslateVRAMAddress(add & 0x7FFF)];
+    }
+
+    void doMult()
+    {
+        mult = (int16_t)mode7A * (int8_t)((mode7B >> 8));
+    }
+
+    void IncVMADD()
+    {
+        uint8 inc = VMAINC & 0b00000011;
+        switch (inc)
+        {
+        case 0:
+            vramPtr += 1;
+            break;
+        case 1:
+            vramPtr += 32;
+            break;
+        case 2:
+            vramPtr += 128;
+            break;
+        case 3:
+            vramPtr += 128;
+            break;
+        default:
+
+            break;
+        }
+        vramPtr &= 0x7FFF; // Bit 15 of vram address is ignored.
+    }
+
     // TOOD : later all these registers can be replaced by just their funtionality
     uint8 IORead(add24 address)
     {
@@ -325,13 +242,13 @@ public:
         {
 
         case 0x2134: // MPYL
-            return this->regs.MPYL;
+            return (mult & 0x000000FF);
             break;
         case 0x2135: // MPYM
-            return this->regs.MPYM;
+            return ((mult & 0x0000FF00) >> 8);
             break;
         case 0x2136: // MPYH
-            return this->regs.MPYH;
+            return (mult & 0x00FF0000) >> 16;
             break;
 
         case 0x2137: // SLHV
@@ -341,7 +258,7 @@ public:
             return 0;
             break;
         case 0x2138: // OAMDATA_READ
-            return this->regs.OAMDATA_READ;
+            return 0;
             break;
 
         case 0x2118: // for some reason zelda uses this
@@ -349,7 +266,7 @@ public:
         {
             uint16 add = (vramAddr + TranslateVRAMAddress(vramPtr)) & 0x7FFF;
             uint8 t = vram[add] & 0x00ff;
-            if (!(regs.VMAINC & 0b10000000)) // Inc on low
+            if (!(VMAINC & 0b10000000)) // Inc on low
                 IncVMADD();
             return t;
             break;
@@ -360,7 +277,7 @@ public:
         {
             uint16 add = (vramAddr + TranslateVRAMAddress(vramPtr)) & 0x7FFF;
             uint8 t = (vram[add] & 0xff00) >> 8;
-            if (regs.VMAINC & 0b10000000) // Inc on high
+            if (VMAINC & 0b10000000) // Inc on high
                 IncVMADD();
             return t;
             break;
@@ -389,14 +306,14 @@ public:
             if (!hCounterLatchHL) // Low
             {
                 hCounterLatchHL = true;
-                regs.OPHCT = hCounterLatch & 0x00FF;
+                OPHCT = hCounterLatch & 0x00FF;
             }
             else
             {
                 hCounterLatchHL = false;
-                regs.OPHCT = (hCounterLatch & 0xFF00) >> 8;
+                OPHCT = (hCounterLatch & 0xFF00) >> 8;
             }
-            return this->regs.OPHCT;
+            return OPHCT;
             break;
         }
         case 0x213D: // OPVCT
@@ -404,23 +321,23 @@ public:
             if (!vCounterLatchHL) // Low
             {
                 vCounterLatchHL = true;
-                regs.OPVCT = vCounterLatch & 0x00FF;
+                OPVCT = vCounterLatch & 0x00FF;
             }
             else
             {
                 vCounterLatchHL = false;
-                regs.OPVCT = (vCounterLatch & 0xFF00) >> 8;
+                OPVCT = (vCounterLatch & 0xFF00) >> 8;
             }
-            return this->regs.OPVCT;
+            return OPVCT;
             break;
         }
         case 0x213E: // STAT77
-            return this->regs.STAT77;
+            return 0;
             break;
         case 0x213F:                 // STAT78
             hCounterLatchHL = false; // Yes, here, based on manual page 2-27-23
             vCounterLatchHL = false;
-            return this->regs.STAT78;
+            return 0;
             break;
         default:
             return 0;
@@ -546,7 +463,7 @@ public:
             break;
 
         case 0x2106: // MOSAIC
-            this->regs.MOSAIC = data;
+            MOSAIC = data;
             break;
 
         // 2 lower bits indicate the size which if is bigger than 32x32 has to be used with scrolling to see which tile we are working with.
@@ -672,7 +589,7 @@ public:
             break;
 
         case 0x2115: // VMAINC
-            this->regs.VMAINC = data;
+            VMAINC = data;
             break;
 
         case 0x2116: // VMADDL
@@ -688,7 +605,7 @@ public:
         {
             uint16 add = (vramAddr + TranslateVRAMAddress(vramPtr)) & 0x7FFF;
             vram[add] = (vram[add] & 0xff00) | data;
-            if (!(regs.VMAINC & 0b10000000)) // Inc on low
+            if (!(VMAINC & 0b10000000)) // Inc on low
                 IncVMADD();
 
             break;
@@ -697,14 +614,14 @@ public:
         {
             uint16 add = (vramAddr + TranslateVRAMAddress(vramPtr)) & 0x7FFF;
             vram[add] = (vram[add] & 0x00ff) | (data << 8);
-            if (regs.VMAINC & 0b10000000) // Inc on high
+            if (VMAINC & 0b10000000) // Inc on high
                 IncVMADD();
 
             break;
         }
 
         case 0x211A: // M7SEL
-            this->regs.M7SEL = data;
+            M7SEL = data;
             break;
 
         case 0x211B: // M7A
@@ -765,31 +682,31 @@ public:
         }
 
         case 0x2123: // W12SEL
-            this->regs.W12SEL = data;
+            W12SEL = data;
             break;
         case 0x2124: // W34SEL
-            this->regs.W34SEL = data;
+            W34SEL = data;
             break;
         case 0x2125: // WOBJSEL
-            this->regs.WOBJSEL = data;
+            WOBJSEL = data;
             break;
         case 0x2126: // WH0
-            this->regs.WH0 = data;
+            WH0 = data;
             break;
         case 0x2127: // WH1
-            this->regs.WH1 = data;
+            WH1 = data;
             break;
         case 0x2128: // WH2
-            this->regs.WH2 = data;
+            WH2 = data;
             break;
         case 0x2129: // WH3
-            this->regs.WH3 = data;
+            WH3 = data;
             break;
         case 0x212A: // WBGLOG
-            this->regs.WBGLOG = data;
+            WBGLOG = data;
             break;
         case 0x212B: // WOBJLOG
-            this->regs.WOBJLOG = data;
+            WOBJLOG = data;
             break;
 
         case 0x212C: // TM
@@ -808,10 +725,10 @@ public:
             OBJonSubScreen = data & 0b00010000;
             break;
         case 0x212e: // TMW
-            this->regs.TMW = data;
+            TMW = data;
             break;
         case 0x212f: // TSW
-            this->regs.TSW = data;
+            TSW = data;
             break;
         case 0x2130: // CGSWSEL
             constColorSel = !(data & 0x02);
@@ -845,18 +762,12 @@ public:
         }
     }
 
-    PPU()
-    {
-
-        memset(fb, 0, FB_HEIGHT * FB_HEIGHT * sizeof(uint32_t));
-    }
-
     void reset()
     {
-        regs.INIDISP = 0x8F; // BLANK
-        regs.VMAINC = 0x80;
-        regs.CGSWSEL = 0x30;
-        regs.COLDATA = 0xE0;
+
+        VMAINC = 0x80;
+        // CGSWSEL = 0x30;
+        constColor = 0xE0;
         hCounter = 0;
         vCounter = 0;
         hBlank = false;
@@ -890,10 +801,15 @@ public:
             uint16 mainLine[256] = {0};
             uint16 subLine[256] = {0};
             uint8 prior[256] = {0};
+            bool addSubable[256] = {0};
 
             // Apply backdrop by default
             for (int i = 0; i < 256; i++)
-                mainLine[i] = subLine[i] = cgram[0];
+            {
+                mainLine[i] = cgram[0];
+                addSubable[i] = bdpAddSub;
+                subLine[i] = constColor;
+            }
 
             // Handle objects
 
@@ -992,7 +908,11 @@ public:
                         uint16 col = cgram[0b10000000 | (objs[i].objClrPal << 4) | colorIdx];
 
                         if (OBJonMainScreen)
+                        {
                             mainLine[hCnt] = col;
+                            if (objs[i].objClrPal >= 4)
+                                addSubable[hCnt] = objAddSub;
+                        }
                         if (OBJonSubScreen)
                             subLine[hCnt] = col;
                         prior[hCnt] = tPrior;
@@ -1104,7 +1024,10 @@ public:
                     }
 
                     if (BG1onMainScreen)
+                    {
                         mainLine[hCnt] = col;
+                        addSubable[hCnt] = bg1AddSub;
+                    }
                     if (BG1onSubScreen)
                         subLine[hCnt] = col;
                     prior[hCnt] = tPrior;
@@ -1122,6 +1045,8 @@ public:
                 int16_t D = mode7D;
                 for (int hCnt = 0; hCnt < 256; hCnt++)
                 {
+                    if (prior[hCnt] > 3)
+                        continue;
                     uint16 vOffset = ((vCounter << interlacing) + BG1VScroll);
                     uint16 hOffset = (hCnt + BG1HScroll);
 
@@ -1156,10 +1081,13 @@ public:
                         continue;
 
                     if (BG1onMainScreen)
+                    {
                         mainLine[hCnt] = directColor ? colorIdx : cgram[colorIdx];
+                        addSubable[hCnt] = bg1AddSub;
+                    }
                     if (BG1onSubScreen)
                         subLine[hCnt] = directColor ? colorIdx : cgram[colorIdx];
-                    // prior[hCnt] = bg1prior;
+                    prior[hCnt] = 3;
                 }
             }
 
@@ -1258,7 +1186,10 @@ public:
                     }
 
                     if (BG2onMainScreen)
+                    {
                         mainLine[hCnt] = cgram[colAdd];
+                        addSubable[hCnt] = bg2AddSub;
+                    }
                     if (BG2onSubScreen)
                         subLine[hCnt] = cgram[colAdd];
                     prior[hCnt] = tPrior;
@@ -1325,7 +1256,10 @@ public:
                     colAdd = pal << 2 | colorIdx; // + offsets for other BGs
 
                     if (BG3onMainScreen)
+                    {
                         mainLine[hCnt] = cgram[colAdd];
+                        addSubable[hCnt] = bg3AddSub;
+                    }
                     if (BG3onSubScreen)
                         subLine[hCnt] = cgram[colAdd];
                     prior[hCnt] = tPrior;
@@ -1390,7 +1324,10 @@ public:
                     colAdd = pal << 2 | colorIdx; // + offsets for other BGs
 
                     if (BG4onMainScreen)
+                    {
                         mainLine[hCnt] = cgram[colAdd];
+                        addSubable[hCnt] = bg4AddSub;
+                    }
                     if (BG4onSubScreen)
                         subLine[hCnt] = cgram[colAdd];
                     prior[hCnt] = tPrior;
@@ -1404,28 +1341,43 @@ public:
             for (int hCnt = 0; hCnt < 256; hCnt++)
             {
                 uint16 selectedCol = constColorSel ? constColor : subLine[hCnt];
-                uint8 R = (selectedCol & 0b0000000000011111) >> 0;
-                uint8 G = (selectedCol & 0b0000001111100000) >> 5;
-                uint8 B = (selectedCol & 0b0111110000000000) >> 10;
+                int16_t R = (selectedCol & 0b0000000000011111) >> 0;
+                int16_t G = (selectedCol & 0b0000001111100000) >> 5;
+                int16_t B = (selectedCol & 0b0111110000000000) >> 10;
 
                 mainR = ((mainLine[hCnt] & 0b0000000000011111) >> 0);
                 mainG = ((mainLine[hCnt] & 0b0000001111100000) >> 5);
                 mainB = ((mainLine[hCnt] & 0b0111110000000000) >> 10);
 
-                // mainR = mainR + (addSub ? -R : R);
-                // mainR = mainR > 31 ? 31 : mainR;
-                // mainR = mainR < 0 ? 0 : mainR;
-                // mainR = mainR >> (addSubHalf ? 1 : 0);
+                if (addSubable[hCnt])
+                {
 
-                // mainG = mainG + (addSub ? -G : G);
-                // mainG = mainG > 31 ? 31 : mainG;
-                // mainG = mainG < 0 ? 0 : mainG;
-                // mainG = mainG >> (addSubHalf ? 1 : 0);
+                    mainR = (mainR + (addSub ? -R : R)) / (addSubHalf ? 2 : 1);
+                    mainR = mainR > 31 ? 31 : mainR;
+                    mainR = mainR < 0 ? 0 : mainR;
 
-                // mainB = mainB + (addSub ? -B : B);
-                // mainB = mainB > 31 ? 31 : mainB;
-                // mainB = mainB < 0 ? 0 : mainB;
-                // mainB = mainB >> (addSubHalf ? 1 : 0);
+                    mainG = (mainG + (addSub ? -G : G)) / (addSubHalf ? 2 : 1);
+                    mainG = mainG > 31 ? 31 : mainG;
+                    mainG = mainG < 0 ? 0 : mainG;
+
+                    mainB = (mainB + (addSub ? -B : B)) / (addSubHalf ? 2 : 1);
+                    mainB = mainB > 31 ? 31 : mainB;
+                    mainB = mainB < 0 ? 0 : mainB;
+                }
+                else
+                {
+                    mainR = (mainR + (addSub ? -R : R));
+                    mainR = mainR > 31 ? 31 : mainR;
+                    mainR = mainR < 0 ? 0 : mainR;
+
+                    mainG = (mainG + (addSub ? -G : G));
+                    mainG = mainG > 31 ? 31 : mainG;
+                    mainG = mainG < 0 ? 0 : mainG;
+
+                    mainB = (mainB + (addSub ? -B : B));
+                    mainB = mainB > 31 ? 31 : mainB;
+                    mainB = mainB < 0 ? 0 : mainB;
+                }
 
                 uint8 fade = ((15 - fadeValue) << 4);
                 mainR = (mainR << 3);
@@ -1479,4 +1431,4 @@ public:
             vBlank = true;
         }
     }
-};
+}

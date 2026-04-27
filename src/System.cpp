@@ -16,9 +16,9 @@ typedef unsigned int add24;
 #include "CTRL.cpp"
 #include "MDUnit.cpp"
 
-Cartridge *rom;
+
 CPU *cpu;
-PPU *ppu;
+
 DMA *dma;
 MDUnit *mdu;
 ControllerSystem *ctrlsys;
@@ -79,7 +79,7 @@ void DumpVRam()
 {
     ofstream outFile("VRAMDump.bin", std::ios::binary);
 
-    outFile.write(reinterpret_cast<const char *>(ppu->vram), (size_t)32 * 1024 * sizeof(uint16));
+    outFile.write(reinterpret_cast<const char *>(PPU::vram), (size_t)32 * 1024 * sizeof(uint16));
 
     outFile.close();
 }
@@ -87,7 +87,7 @@ void DumpOARam()
 {
     ofstream outFile("OAMDump.bin", std::ios::binary);
 
-    outFile.write(reinterpret_cast<const char *>(ppu->oam), (size_t)272 * sizeof(uint16));
+    outFile.write(reinterpret_cast<const char *>(PPU::oam), (size_t)272 * sizeof(uint16));
 
     outFile.close();
 }
@@ -113,7 +113,7 @@ uint64_t emuStep = 0;
 void emu()
 {
     cpu->reset();
-    ppu->reset();
+    PPU::reset();
     APU::Init();
     VTIMEL = 0xff;
     VTIMEH = 0x01;
@@ -125,7 +125,7 @@ void emu()
     while (true) // Emulation Loop
     {
 
-        if ((pauseEmu || ppu->pauseEmu) && !runStep && !runVBlank && !runInst && !runHBlank)
+        if ((pauseEmu || PPU::pauseEmu) && !runStep && !runVBlank && !runInst && !runHBlank)
         {
             mfb_update_events(window);
             continue;
@@ -134,7 +134,7 @@ void emu()
         if (!dma->dmaActive)
         {
 
-            if (emuStep % 16 == 0)
+            if (emuStep % 8 == 0)
             {
                 runInst = false;
                 if (debug)
@@ -156,7 +156,7 @@ void emu()
             }
         }
 
-        if (emuStep % 1 == 0)
+        if (emuStep % 2 == 0)
         {
             auto start = chrono::steady_clock::now();
             dma->step(!hdmaRan);
@@ -188,11 +188,11 @@ void emu()
         vBlankEntryMoment = false;
 
         auto start = chrono::steady_clock::now();
-        ppu->step(); // every 341*262 = 89342 steps => 1 frame
+        PPU::step(); // every 341*262 = 89342 steps => 1 frame
         auto end = chrono::steady_clock::now();
         ppuTime += chrono::duration_cast<std::chrono::nanoseconds>(end - start).count();
 
-        if (ppu->hCounter == 0 && ppu->vCounter == 225) // Start of VBlank
+        if (PPU::hCounter == 0 && PPU::vCounter == 225) // Start of VBlank
         {
             // dma->HDMAEN = 0;
             vBlankEntryMoment = true;
@@ -205,7 +205,7 @@ void emu()
             // {
             //     for (int x = 0; x < WIN_WIDTH; x++)
             //     {
-            //         window_fb[y * WIN_WIDTH + x] = ppu->fb[(y / (WIN_WIDTH / FB_WIDTH)) * FB_WIDTH + (x / (WIN_WIDTH / FB_WIDTH))];
+            //         window_fb[y * WIN_WIDTH + x] = PPU::fb[(y / (WIN_WIDTH / FB_WIDTH)) * FB_WIDTH + (x / (WIN_WIDTH / FB_WIDTH))];
             //     }
             // }
 
@@ -218,7 +218,7 @@ void emu()
                 // 1. Scale a single row horizontally
                 for (int sx = 0; sx < FB_WIDTH; sx++)
                 {
-                    auto pixel = ppu->fb[src_row_idx + sx];
+                    auto pixel = PPU::fb[src_row_idx + sx];
                     int dx = sx * SCALE;
 
                     // Because SCALE is a compile-time constant, the compiler will
@@ -243,7 +243,7 @@ void emu()
                 for (int x = 0; x < WIN_WIDTH; x++)
                 {
 
-                    uint16 col = ppu->cgram[x / (WIN_WIDTH / FB_WIDTH)];
+                    uint16 col = PPU::cgram[x / (WIN_WIDTH / FB_WIDTH)];
 
                     uint8 R = (col & 0b0000000000011111) << 3;
                     uint8 G = (col & 0b0000001111100000) >> 2;
@@ -254,7 +254,7 @@ void emu()
             }
 
             mfb_update_ex(window, window_fb, WIN_WIDTH, WIN_HEIGHT);
-            mfb_set_title(window, to_string(ppu->frameCount).c_str());
+            mfb_set_title(window, to_string(PPU::frameCount).c_str());
             mfb_wait_sync(window);
             auto end = chrono::steady_clock::now();
             drawTime += chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
@@ -283,16 +283,16 @@ void emu()
 
         start = chrono::steady_clock::now();
 
-        if (ppu->vCounter == 261 && ppu->hCounter == 340) // End of VBlank
+        if (PPU::vCounter == 261 && PPU::hCounter == 340) // End of VBlank
         {
             RDNMI = 0b00000000;
         }
-        if (ppu->vCounter < 225 && ppu->hCounter == 256) // Start of HBlank
+        if (PPU::vCounter < 225 && PPU::hCounter == 256) // Start of HBlank
         {
             hdmaRan = false;
             runHBlank = false;
         }
-        if (ppu->hCounter == 0 && ppu->vCounter == 0) // Start of Frame
+        if (PPU::hCounter == 0 && PPU::vCounter == 0) // Start of Frame
         {
             dma->initializeHDMA();
         }
@@ -306,17 +306,17 @@ void emu()
             break;
         case 1:
             TIMEUP = 0b10000000;
-            if ((HTIMEH << 8 | HTIMEL) == ppu->hCounter)
+            if ((HTIMEH << 8 | HTIMEL) == PPU::hCounter)
                 cpu->invokeIRQ();
             break;
         case 2:
             TIMEUP = 0b10000000;
-            if ((VTIMEH << 8 | VTIMEL) == ppu->vCounter && ppu->hCounter == 0)
+            if ((VTIMEH << 8 | VTIMEL) == PPU::vCounter && PPU::hCounter == 0)
                 cpu->invokeIRQ();
             break;
         case 3:
             TIMEUP = 0b10000000;
-            if ((VTIMEH << 8 | VTIMEL) == ppu->vCounter && ppu->hCounter == (HTIMEH << 8 | HTIMEL))
+            if ((VTIMEH << 8 | VTIMEL) == PPU::vCounter && PPU::hCounter == (HTIMEH << 8 | HTIMEL))
                 cpu->invokeIRQ();
             break;
 
@@ -336,10 +336,10 @@ void exitEmu()
     cpuTraceFile.close();
 
     stringstream ss;
-    ss << rom->title << ".srm";
+    ss << Cartridge::title << ".srm";
 
     ofstream sramFile(ss.str(), std::ios::binary);
-    sramFile.write(reinterpret_cast<const char *>(rom->sram), rom->sramSize * sizeof(uint8));
+    sramFile.write(reinterpret_cast<const char *>(Cartridge::sram), Cartridge::sramSize * sizeof(uint8));
     sramFile.close();
 
     mfb_close(window);
@@ -357,7 +357,7 @@ void keyboard_callback(struct mfb_window *window, mfb_key key, mfb_key_mod mod, 
         if (key == KB_KEY_P)
         {
             pauseEmu = !pauseEmu;
-            ppu->pauseEmu = pauseEmu;
+            PPU::pauseEmu = pauseEmu;
         }
         if (key == KB_KEY_1)
         {
@@ -370,39 +370,38 @@ void keyboard_callback(struct mfb_window *window, mfb_key key, mfb_key_mod mod, 
         }
         if (key == KB_KEY_0)
         {
-            cout << "Mode : " << hex << (uint16)ppu->mode << endl;
-            cout << "INIDISP : " << hex << (uint16)ppu->regs.INIDISP << endl;
-            cout << "BG1Base : " << hex << (uint16)ppu->BG1BaseAddr << endl;
-            cout << "BG1ChrBase : " << hex << (uint16)ppu->BG1ChrsBaseAddr << endl;
-            cout << "BG2Base : " << hex << (uint16)ppu->BG2BaseAddr << endl;
-            cout << "BG2ChrBase : " << hex << (uint16)ppu->BG2ChrsBaseAddr << endl;
+            cout << "Mode : " << hex << (uint16)PPU::mode << endl;
+            cout << "BG1Base : " << hex << (uint16)PPU::BG1BaseAddr << endl;
+            cout << "BG1ChrBase : " << hex << (uint16)PPU::BG1ChrsBaseAddr << endl;
+            cout << "BG2Base : " << hex << (uint16)PPU::BG2BaseAddr << endl;
+            cout << "BG2ChrBase : " << hex << (uint16)PPU::BG2ChrsBaseAddr << endl;
             runVBlank = true;
         }
         if (key == KB_KEY_O)
         {
-            cout << "Mode : " << hex << (uint16)ppu->mode << endl;
-            cout << "DirCol : " << hex << (uint16)ppu->directColor << endl;
-            cout << "force blnk : " << hex << (uint16)ppu->forceBlank << endl;
-            cout << "fade : " << hex << (uint16)ppu->fadeValue << endl;
-            cout << "h : " << hex << (uint16)ppu->hCounter << endl;
-            cout << "v : " << hex << (uint16)ppu->vCounter << endl;
-            cout << "hBlank : " << hex << (uint16)ppu->hBlank << endl;
-            cout << "vBlank : " << hex << (uint16)ppu->vBlank << endl;
-            cout << "VMAINC : " << hex << (uint16)ppu->regs.VMAINC << endl;
+            cout << "Mode : " << hex << (uint16)PPU::mode << endl;
+            cout << "DirCol : " << hex << (uint16)PPU::directColor << endl;
+            cout << "force blnk : " << hex << (uint16)PPU::forceBlank << endl;
+            cout << "fade : " << hex << (uint16)PPU::fadeValue << endl;
+            cout << "h : " << hex << (uint16)PPU::hCounter << endl;
+            cout << "v : " << hex << (uint16)PPU::vCounter << endl;
+            cout << "hBlank : " << hex << (uint16)PPU::hBlank << endl;
+            cout << "vBlank : " << hex << (uint16)PPU::vBlank << endl;
+            cout << "VMAINC : " << hex << (uint16)PPU::VMAINC << endl;
 
-            cout << "OBJChrTable1BaseAddr : " << hex << (uint16)ppu->OBJChrTable1BaseAddr << endl;
-            cout << "OBJChrTable2BaseAddr : " << hex << (uint16)ppu->OBJChrTable2BaseAddr << endl;
+            cout << "OBJChrTable1BaseAddr : " << hex << (uint16)PPU::OBJChrTable1BaseAddr << endl;
+            cout << "OBJChrTable2BaseAddr : " << hex << (uint16)PPU::OBJChrTable2BaseAddr << endl;
 
-            cout << "Add Sub : " << hex << (uint16)ppu->addSub << endl;
+            cout << "Add Sub : " << hex << (uint16)PPU::addSub << endl;
 
-            cout << "BG1 MS EN : " << hex << ppu->BG1onMainScreen << endl;
-            cout << "BG1Base : " << hex << (uint16)ppu->BG1BaseAddr << endl;
-            cout << "BG1ChrBase : " << hex << (uint16)ppu->BG1ChrsBaseAddr << endl;
+            cout << "BG1 MS EN : " << hex << PPU::BG1onMainScreen << endl;
+            cout << "BG1Base : " << hex << (uint16)PPU::BG1BaseAddr << endl;
+            cout << "BG1ChrBase : " << hex << (uint16)PPU::BG1ChrsBaseAddr << endl;
 
-            cout << "BG2 MS EN : " << hex << ppu->BG2onMainScreen << endl;
-            cout << "BG2Base : " << hex << (uint16)ppu->BG2BaseAddr << endl;
-            cout << "BG2ChrBase : " << hex << (uint16)ppu->BG2ChrsBaseAddr << endl;
-            cout << "BG2Scroll : (" << hex << ppu->BG2HScroll << "," << ppu->BG2VScroll << ")" << endl;
+            cout << "BG2 MS EN : " << hex << PPU::BG2onMainScreen << endl;
+            cout << "BG2Base : " << hex << (uint16)PPU::BG2BaseAddr << endl;
+            cout << "BG2ChrBase : " << hex << (uint16)PPU::BG2ChrsBaseAddr << endl;
+            cout << "BG2Scroll : (" << hex << PPU::BG2HScroll << "," << PPU::BG2VScroll << ")" << endl;
         }
         if (key == KB_KEY_MINUS)
         {
@@ -434,27 +433,27 @@ void keyboard_callback(struct mfb_window *window, mfb_key key, mfb_key_mod mod, 
         }
         if (key == KB_KEY_F1)
         {
-            ppu->bgFilter = 1;
+            PPU::bgFilter = 1;
         }
         if (key == KB_KEY_F2)
         {
-            ppu->bgFilter = 2;
+            PPU::bgFilter = 2;
         }
         if (key == KB_KEY_F3)
         {
-            ppu->bgFilter = 3;
+            PPU::bgFilter = 3;
         }
         if (key == KB_KEY_F4)
         {
-            ppu->bgFilter = 4;
+            PPU::bgFilter = 4;
         }
         if (key == KB_KEY_F5)
         {
-            ppu->bgFilter = 5;
+            PPU::bgFilter = 5;
         }
         if (key == KB_KEY_F6)
         {
-            ppu->bgFilter = 0;
+            PPU::bgFilter = 0;
         }
     }
     // Controller
@@ -545,15 +544,15 @@ void mouse_btn_callback(struct mfb_window *window, mfb_mouse_button button, mfb_
         for (int i = 0; i < 128; i++)
         {
             uint8 shftAmnt = ((i & 0b00000111) << 1);
-            uint8 objY = (ppu->oam[i << 1] & 0xff00) >> 8;
-            int16_t objX = (ppu->oam[i << 1] & 0x00ff);
-            bool xSign = ppu->oam[256 + (i >> 3)] & (0x01 << shftAmnt);
+            uint8 objY = (PPU::oam[i << 1] & 0xff00) >> 8;
+            int16_t objX = (PPU::oam[i << 1] & 0x00ff);
+            bool xSign = PPU::oam[256 + (i >> 3)] & (0x01 << shftAmnt);
             objX |= xSign ? 0xFF00 : 0x0000;
 
-            bool objSizeFlag = (ppu->oam[256 + (i >> 3)] & (0x02 << shftAmnt));
+            bool objSizeFlag = (PPU::oam[256 + (i >> 3)] & (0x02 << shftAmnt));
 
             uint8 objSize = 8;
-            switch (ppu->objAvailSize)
+            switch (PPU::objAvailSize)
             {
             case 0:
                 objSize = objSizeFlag ? 16 : 8;
@@ -583,7 +582,7 @@ void mouse_btn_callback(struct mfb_window *window, mfb_mouse_button button, mfb_
                 continue;
             }
 
-            uint16 dt = ppu->oam[(i << 1) + 1];
+            uint16 dt = PPU::oam[(i << 1) + 1];
             uint16 chr = dt & 0x00ff;
             bool table = dt & 0x0100;
             uint8 pal = (dt & 0b0000111000000000) >> 9;
@@ -613,27 +612,27 @@ void mouse_btn_callback(struct mfb_window *window, mfb_mouse_button button, mfb_
             if (vf)
                 y = 7 - y;
 
-            uint16 objCharAddr = (table ? ppu->OBJChrTable2BaseAddr : ppu->OBJChrTable1BaseAddr) + (chr << 4); // Obj size later plays a part in here
+            uint16 objCharAddr = (table ? PPU::OBJChrTable2BaseAddr : PPU::OBJChrTable1BaseAddr) + (chr << 4); // Obj size later plays a part in here
 
-            colorIdx |= ((ppu->vram[objCharAddr + y] >> (7 - x)) & 0x01);
+            colorIdx |= ((PPU::vram[objCharAddr + y] >> (7 - x)) & 0x01);
 
-            colorIdx |= ((ppu->vram[objCharAddr + y] >> (15 - x)) & 0x01) << 1;
+            colorIdx |= ((PPU::vram[objCharAddr + y] >> (15 - x)) & 0x01) << 1;
 
-            colorIdx |= ((ppu->vram[objCharAddr + y + 8] >> (7 - x)) & 0x01) << 2;
+            colorIdx |= ((PPU::vram[objCharAddr + y + 8] >> (7 - x)) & 0x01) << 2;
 
-            colorIdx |= ((ppu->vram[objCharAddr + y + 8] >> (15 - x)) & 0x01) << 3;
+            colorIdx |= ((PPU::vram[objCharAddr + y + 8] >> (15 - x)) & 0x01) << 3;
 
             if (prior >= ojbprior && colorIdx != 0)
             {
                 ojbprior = prior;
-                objcol = ppu->cgram[0b10000000 | (pal << 4) | colorIdx];
+                objcol = PPU::cgram[0b10000000 | (pal << 4) | colorIdx];
                 objopaque = true;
             }
 
             if (objopaque)
             {
                 cout << "=-=-=-=-=-=- OBJ[" << i << "] -=-=-=-=-=-=-=" << endl;
-                cout << "objData at " << dec << (256 + (i >> 3)) << " : " << hex << ppu->oam[256 + (i >> 3)] << endl;
+                cout << "objData at " << dec << (256 + (i >> 3)) << " : " << hex << PPU::oam[256 + (i >> 3)] << endl;
                 cout << "hCount " << mouseX << endl;
                 cout << "vCount " << mouseY << endl;
                 cout << "dt " << hex << dt << endl;
@@ -641,7 +640,7 @@ void mouse_btn_callback(struct mfb_window *window, mfb_mouse_button button, mfb_
                 cout << "tileY " << (uint16)tileY << endl;
                 cout << "colorIdx " << (uint16)colorIdx << endl;
                 cout << "objCol " << (uint16)objcol << endl;
-                cout << "objGlobalSize " << (uint16)ppu->objAvailSize << endl;
+                cout << "objGlobalSize " << (uint16)PPU::objAvailSize << endl;
                 cout << "objSizeFlag " << (uint16)objSizeFlag << endl;
                 cout << "objSize " << (uint16)objSize << endl;
                 cout << "ojbprior " << (uint16)prior << endl;
@@ -669,7 +668,7 @@ void WriteIO(add24 address, uint8 data)
     //  cin.get();
     if (port >= 0x2100 && port <= 0x213F) // PPU
     {
-        ppu->IOWrite(port, data);
+        PPU::IOWrite(port, data);
         return;
     }
     else if (port >= 0x2140 && port <= 0x2143) // APU
@@ -787,7 +786,7 @@ uint8 ReadIO(add24 address)
     {
         if (port == 0x2137)
             cpu->setOverflow();
-        return ppu->IORead(port);
+        return PPU::IORead(port);
     }
     else if (port >= 0x2140 && port <= 0x2143) // APU
     {
@@ -833,7 +832,7 @@ uint8 ReadIO(add24 address)
             break;
 
         case 0x4212: // HVBJOY
-            return ((ppu->vBlank) << 7) | ((ppu->hBlank) << 6) | (0);
+            return ((PPU::vBlank) << 7) | ((PPU::hBlank) << 6) | (0);
             break;
 
         case 0x4213: // RDIO
@@ -873,7 +872,7 @@ uint8 BusAccess(add24 address, uint8 data, bool rd = false)
 
     // cout << "Translate Address : " << std::hex << address << endl;
 
-    if (rom->mapType == LoROM)
+    if (Cartridge::mapType == LoROM)
     {
         // Extract bank and offset for easier math
         uint8_t bank = (address >> 16) & 0xFF;
@@ -905,10 +904,10 @@ uint8 BusAccess(add24 address, uint8 data, bool rd = false)
             uint32_t rom_offset = (bank * 0x8000) + (offset - 0x8000);
 
             // Good practice: ensure we don't read out of bounds
-            if (rom_offset < rom->romSize)
+            if (rom_offset < Cartridge::romSize)
             {
                 if (rd)
-                    return *(rom->rom + rom_offset);
+                    return *(Cartridge::rom + rom_offset);
                 else
                 {
                     cout << "Writing to ROM?! I don't think so." << endl;
@@ -940,22 +939,22 @@ uint8 BusAccess(add24 address, uint8 data, bool rd = false)
         // 4. SRAM (Typically Banks $70-$7D, Offsets $0000-$7FFF)
         if (bank >= 0x70 && bank <= 0x7D && offset < 0x8000)
         {
-            if (!rom->hasSram)
+            if (!Cartridge::hasSram)
             {
                 return zeroWire;
             }
             // Calculate contiguous SRAM offset
             uint32_t sram_offset = ((bank - 0x70) * 0x8000) + offset;
-            sram_offset &= (rom->sramSize - 1);
+            sram_offset &= (Cartridge::sramSize - 1);
 
             if (rd)
-                return *(rom->sram + sram_offset);
+                return *(Cartridge::sram + sram_offset);
             else
-                *(rom->sram + sram_offset) = data;
+                *(Cartridge::sram + sram_offset) = data;
         }
         return zeroWire;
     }
-    else if (rom->mapType == HiROM || rom->mapType == ExHiROM)
+    else if (Cartridge::mapType == HiROM || Cartridge::mapType == ExHiROM)
     {
         uint8_t bank = (address >> 16) & 0xFF;
         uint16_t offset = address & 0xFFFF;
@@ -993,18 +992,18 @@ uint8 BusAccess(add24 address, uint8 data, bool rd = false)
             }
             else if (offset >= 0x6000 && offset < 0x8000) // SRAM
             {
-                if (!rom->hasSram)
+                if (!Cartridge::hasSram)
                 {
                     return zeroWire;
                 }
                 // SRAM maps to 8KB chunks. Strip to 5 bits for continuous SRAM mapping.
                 uint32_t sram_offset = ((bank & 0x1F) * 0x2000) + (offset - 0x6000);
-                sram_offset &= (rom->sramSize - 1);
+                sram_offset &= (Cartridge::sramSize - 1);
 
                 if (rd)
-                    return *(rom->sram + sram_offset);
+                    return *(Cartridge::sram + sram_offset);
                 else
-                    *(rom->sram + sram_offset) = data;
+                    *(Cartridge::sram + sram_offset) = data;
             }
         }
 
@@ -1018,16 +1017,16 @@ uint8 BusAccess(add24 address, uint8 data, bool rd = false)
             uint32_t rom_offset = ((rom_bank - 0x40) * 0x10000) + offset;
 
             // ExHiROM moves the upper 4MB to banks $40-$7D
-            if (rom->mapType == ExHiROM)
+            if (Cartridge::mapType == ExHiROM)
             {
                 rom_offset += 0x400000; // Offset by 4MB
             }
 
-            if (rom_offset < rom->romSize)
+            if (rom_offset < Cartridge::romSize)
             {
 
                 if (rd)
-                    return *(rom->rom + rom_offset);
+                    return *(Cartridge::rom + rom_offset);
                 else
                 {
                     cout << "Rom at : " << hex << rom_offset << endl;
@@ -1043,10 +1042,10 @@ uint8 BusAccess(add24 address, uint8 data, bool rd = false)
             uint8_t mirror_bank = bank & 0x3F;
             uint32_t rom_offset = (mirror_bank * 0x10000) + offset;
 
-            if (rom_offset < rom->romSize)
+            if (rom_offset < Cartridge::romSize)
             {
                 if (rd)
-                    return *(rom->rom + rom_offset);
+                    return *(Cartridge::rom + rom_offset);
                 else
                 {
                     cout << "Writing to ROM?! I don't think so." << endl;
@@ -1091,13 +1090,12 @@ int main(int argc, char *argv[])
         return 1;
     }
 
-    rom = new Cartridge(argv[1]);
-
+    Cartridge::load(argv[1]);
     stringstream ss;
-    ss << rom->title << ".srm";
+    ss << Cartridge::title << ".srm";
     ifstream sramFile(ss.str(), std::ios::binary);
 
-    if (rom->hasSram)
+    if (Cartridge::hasSram)
     {
         bool sramExists = true;
         if (!sramFile.is_open())
@@ -1106,14 +1104,13 @@ int main(int argc, char *argv[])
         }
         if (sramExists)
         {
-            sramFile.read(reinterpret_cast<char *>(rom->sram), rom->sramSize);
+            sramFile.read(reinterpret_cast<char *>(Cartridge::sram), Cartridge::sramSize);
         }
         sramFile.close();
     }
 
     cpu = new CPU(C65Read, C65Write);
 
-    ppu = new PPU();
     dma = new DMA(DMARead, DMAWrite);
     mdu = new MDUnit();
     ctrlsys = new ControllerSystem();
@@ -1121,6 +1118,7 @@ int main(int argc, char *argv[])
     cpuTraceFile = ofstream("CPUTrace.txt");
 
     window = mfb_open_ex("MTOSFC", WIN_WIDTH, WIN_HEIGHT, NULL);
+    mfb_set_target_fps(240);  
     mfb_set_keyboard_callback(window, keyboard_callback);
     mfb_set_mouse_button_callback(window, mouse_btn_callback);
     mfb_set_mouse_move_callback(window, mouse_move_callback);
