@@ -585,31 +585,13 @@ public:
             BG4ChrsBaseAddr &= 0x7fff;
             break;
 
-        case 0x210D:           // BG1H0FS
-            //if (!BG1HScrollHL) // Low
-            //{
-            //    BG1HScroll = (BG1HScroll & 0xFF00) | data;
-            //    BG1HScrollHL = true;
-            //}
-            //else // High
-            //{
-            //    BG1HScroll = (BG1HScroll & 0x00FF) | (data << 8);
-            //    BG1HScrollHL = false;
-            //}
+        case 0x210D: // BG1H0FS
+
             BG1HScroll = (data << 8) | mode7Old;
             mode7Old = data;
             break;
-        case 0x210E:           // BG1V0FS
-            //if (!BG1VScrollHL) // Low
-            //{
-            //    BG1VScroll = (BG1VScroll & 0xFF00) | data;
-            //    BG1VScrollHL = true;
-            //}
-            //else // High
-            //{
-            //    BG1VScroll = (BG1VScroll & 0x00FF) | (data << 8);
-            //    BG1VScrollHL = false;
-            //}
+        case 0x210E: // BG1V0FS
+
             BG1VScroll = (data << 8) | mode7Old;
             mode7Old = data;
             break;
@@ -708,8 +690,6 @@ public:
             vram[add] = (vram[add] & 0xff00) | data;
             if (!(regs.VMAINC & 0b10000000)) // Inc on low
                 IncVMADD();
-            // cout << (uint16) regs.VMAINC << endl;
-            // cout << "vram written to(low) : " << (uint16) add << " : " << vram[add]<< endl;
 
             break;
         }
@@ -719,7 +699,6 @@ public:
             vram[add] = (vram[add] & 0x00ff) | (data << 8);
             if (regs.VMAINC & 0b10000000) // Inc on high
                 IncVMADD();
-            // cout << "vram written to : " << (uint16) add << " : " << vram[add]<< endl;
 
             break;
         }
@@ -729,16 +708,7 @@ public:
             break;
 
         case 0x211B: // M7A
-            // if (!mode7AHL) // Low
-            //{
-            //     mode7A = (mode7A & 0xFF00) | data;
-            //     mode7AHL = true;
-            // }
-            // else // High
-            //{
-            //     mode7A = (mode7A & 0x00FF) | (data << 8);
-            //     mode7AHL = false;
-            // }
+
             mode7A = (data << 8) | mode7Old;
             mode7Old = data;
             break;
@@ -774,7 +744,6 @@ public:
         {
             cgDataHL = false;
             cgAddr = data;
-            // cout << "CGADD : " << hex << (unsigned int)data << endl;
             break;
         }
         case 0x2122: // CGDATA
@@ -895,64 +864,39 @@ public:
         frameCount = 0;
     }
 
-    // Notes:
-
-    // Vram:
-    // 0x8000 x 2 table, each row a word.
-    // It holds both characters (tile types), which are the shape of a tile
-    // and the BG grid, each tile in a grid has a number which corresponds to the tile type.
-
-    // CGRam:
-    //  256 x 2 table. each row a 16 bit color.
-    // How these rows are partition to form palettes for different objs and bgs is based on the mode.
-    // rows 0x80 to 0xFF are always used for OBJ palette, 8 palettes of 16 colors.
-
-    // Objects:
-    //  There can be 128 objects
-    //  Their overlapping is handled by their priority
-    //  They can also be flipped vertically or horizontally
-    //  Each takes 2, 16 bit places in oam. 4 byte for each obj
-
-    // OAM: (manual page A-3)
-    //  is a 272 x 2 byte table.
-    //  0 to 255 used to store the actual 4 byte obj (128 obj in total)
-    // 256 to 272 used to some more data, 8 object per row (16 bit).
-
-    // Steps (Pixel By Pixel)
-    // Find what BG tile the pixel lies in.
-    // Go through all the BGs in priorit order and find the first that has a pixel in that position in that tile.
-    // Loop through all the OBJ in priority order and check id the pixel lies in that obj.
-    // finally check the priority of the object and the BG and place the pixel.
-
-    // Do the same for the sub screen
-    // Blend the main screen and the sub screen
     void step()
     {
-        // Visible area, the 4 8x8 tiles at the bottom are cutoff
 
-        if (vCounter >= 0 && vCounter < 224 && hCounter >= 0 && hCounter < 256)
+        if (hCounter == 255 && vCounter < 224)
         {
 
-            uint16 scol = cgram[0];
-            uint16 bg1col = 0;
-            uint16 bg2col = 0;
-            uint16 bg3col = 0;
-            uint16 bg4col = 0;
-            uint16 objcol = 0;
+            // BG
+            // Priority
+            // Offset
+            // vCounter
+            // Size
+            // Color mode
+            // Mode
+            // Direct Color
+            // On (Main/Sub) Screen
+            // Add Color
 
-            bool bg1opaque = false;
-            bool bg2opaque = false;
-            bool bg3opaque = false;
-            bool bg4opaque = false;
-            bool objopaque = false;
+            // OBJ
+            // Size
+            // Offset
+            // vCounter
+            // Size
 
-            bool bg1prior = 0;
-            bool bg2prior = 0;
-            bool bg3prior = 0;
-            bool bg4prior = 0;
-            uint8 ojbprior = 0;
+            uint16 mainLine[256] = {0};
+            uint16 subLine[256] = {0};
+            uint8 prior[256] = {0};
+
+            // Apply backdrop by default
+            for (int i = 0; i < 256; i++)
+                mainLine[i] = subLine[i] = cgram[0];
 
             // Handle objects
+
             if (OBJonMainScreen || OBJonSubScreen)
             {
                 for (int i = 127; i >= 0; i--)
@@ -986,164 +930,189 @@ public:
                         break;
                     }
 
-                    if (vCounter < objs[i].objY || vCounter >= objs[i].objY + objSize || hCounter < objs[i].objX || hCounter >= objs[i].objX + objSize) // Point not in obj then go to next
+                    if (vCounter < objs[i].objY || vCounter >= objs[i].objY + objSize || 255 < objs[i].objX || 0 > objs[i].objX + objSize) // Obj not on line
                     {
                         continue;
                     }
 
-                    uint8 colorIdx = 0;
-
-                    uint8 tileX = (hCounter - objs[i].objX) >> 3;
+                    uint8 tPrior = 0;
+                    if (mode == 0 || mode == 1)
+                    {
+                        tPrior = (objs[i].objPrior * 3) + 3;
+                    }
+                    else
+                    {
+                        tPrior = (objs[i].objPrior * 2) + 2;
+                    }
                     uint8 tileY = (vCounter - objs[i].objY) >> 3;
-                    if (objs[i].objHF)
-                        tileX = ((objSize >> 3) - 1) - tileX;
-                    if (objs[i].objVF)
-                        tileY = ((objSize >> 3) - 1) - tileY;
-
-                    uint8 x = (hCounter - objs[i].objX) & 0x07;
                     uint8 y = (vCounter - objs[i].objY) & 0x07;
 
-                    uint16 chr = objs[i].objChrName;
-                    chr += (uint16)tileX + ((uint16)tileY << 4);
-
-                    if (objs[i].objHF)
-                        x = 7 - x;
-                    if (objs[i].objVF)
-                        y = 7 - y;
-
-                    uint16 objCharAddr = (objs[i].objChrTable ? OBJChrTable2BaseAddr : OBJChrTable1BaseAddr) + (chr << 4);
-
-                    colorIdx |= ((VRAMRead(objCharAddr + y) >> (7 - x)) & 0x01);
-
-                    colorIdx |= ((VRAMRead(objCharAddr + y) >> (15 - x)) & 0x01) << 1;
-
-                    colorIdx |= ((VRAMRead(objCharAddr + y + 8) >> (7 - x)) & 0x01) << 2;
-
-                    colorIdx |= ((VRAMRead(objCharAddr + y + 8) >> (15 - x)) & 0x01) << 3;
-
-                    if (objs[i].objPrior >= ojbprior && colorIdx != 0)
+                    for (uint8 hOff = 0; hOff < objSize; hOff++)
                     {
-                        ojbprior = objs[i].objPrior;
-                        objcol = cgram[0b10000000 | (objs[i].objClrPal << 4) | colorIdx];
-                        objopaque = true;
+                        int hCnt = objs[i].objX + hOff;
+                        if (hCnt < 0)
+                            continue;
+                        if (hCnt > 255)
+                            break;
+
+                        if (prior[hCnt] > tPrior)
+                            continue;
+
+                        uint8 colorIdx = 0;
+                        uint8 tileX = hOff >> 3;
+
+                        if (objs[i].objHF)
+                            tileX = ((objSize >> 3) - 1) - tileX;
+                        if (objs[i].objVF)
+                            tileY = ((objSize >> 3) - 1) - tileY;
+
+                        uint8 x = hOff & 0x07;
+
+                        uint16 chr = objs[i].objChrName;
+                        chr += (uint16)tileX + ((uint16)tileY << 4);
+
+                        if (objs[i].objHF)
+                            x = 7 - x;
+                        if (objs[i].objVF)
+                            y = 7 - y;
+
+                        uint16 objCharAddr = (objs[i].objChrTable ? OBJChrTable2BaseAddr : OBJChrTable1BaseAddr) + (chr << 4);
+
+                        colorIdx |= ((VRAMRead(objCharAddr + y) >> (7 - x)) & 0x01);
+
+                        colorIdx |= ((VRAMRead(objCharAddr + y) >> (15 - x)) & 0x01) << 1;
+
+                        colorIdx |= ((VRAMRead(objCharAddr + y + 8) >> (7 - x)) & 0x01) << 2;
+
+                        colorIdx |= ((VRAMRead(objCharAddr + y + 8) >> (15 - x)) & 0x01) << 3;
+
+                        if (colorIdx == 0)
+                            continue;
+
+                        uint16 col = cgram[0b10000000 | (objs[i].objClrPal << 4) | colorIdx];
+
+                        if (OBJonMainScreen)
+                            mainLine[hCnt] = col;
+                        if (OBJonSubScreen)
+                            subLine[hCnt] = col;
+                        prior[hCnt] = tPrior;
                     }
-                    // cout << "=-=-=-=-=-=- OBJ[" << i << "] -=-=-=-=-=-=-=" << endl;
-                    // cout << "OBJChrTable1BaseAddr" << hex << (uint16) OBJChrTable1BaseAddr << endl;
-                    // cout << "OBJChrTable2BaseAddr" << hex << (uint16) OBJChrTable2BaseAddr << endl;
-                    // cout << "hCount "  << dec << hCounter << endl;
-                    // cout << "vCount " << vCounter << endl;
-                    // cout << "tileX " << (uint16)tileX << endl;
-                    // cout << "tileY " << (uint16)tileY << endl;
-                    // cout << "colorIdx " << (uint16)colorIdx << endl;
-                    // cout << "objCol " << (uint16)objcol << endl;
-                    // cout << "objGlobalSize " << (uint16)objAvailSize << endl;
-                    // cout << "objSizeFlag " << (uint16)objSizeFlag << endl;
-                    // cout << "objSize " << (uint16)objSize << endl;
-                    // cout << "ojbprior " << (uint16)objs[i].objPrior << endl;
-                    // cout << "x " << objs[i].objX << " y " << (uint16)objs[i].objY << endl;
-                    // cout << "Char " << (uint16)objs[i].objChrName << endl;
-                    // cout << "TileChar " << (uint16)chr << endl;
-                    // cout << "CharAddr " << hex << objCharAddr << endl;
-                    // cout << "paletter " << dec << (uint16)objs[i].objClrPal << endl;
                 }
             }
 
             if ((BG1onMainScreen || BG1onSubScreen) && mode <= 6) // BG1 conditions
             {
-
-                uint16 hOffset = (hCounter + BG1HScroll);
                 uint16 vOffset = ((vCounter << interlacing) + BG1VScroll);
 
-                // To the right of the "&" is the logic for wrapping
-                uint8 tileX = (hOffset >> 3) & ((BG1SCSize & 0x1) ? 63 : 31);
-                uint8 tileY = (vOffset >> 3) & ((BG1SCSize & 0x2) ? 63 : 31);
-                uint8 x = hOffset & 0x07;
-                uint8 y = vOffset & 0x07;
-
-                // The tileY shift is done in 2 steps to make sure the first bit is 0
-                uint8 tileS = ((tileY >> 4) & 0x02) | (tileX >> 5);
-
-                tileX &= 0x1f;
-                tileY &= 0x1f;
-
-                if (BG1SCSize == 2 && tileS == 2)
+                for (int hCnt = 0; hCnt < 256; hCnt++)
                 {
-                    tileS = 1;
-                }
+                    uint8 tileY = (vOffset >> 3) & ((BG1SCSize & 0x2) ? 63 : 31);
 
-                // (32*32*tileS)
-                uint16 tileNumber = (tileS << 10) + (tileY << 5) + tileX;
+                    uint8 y = vOffset & 0x07;
+                    uint16 hOffset = hCnt + BG1HScroll;
 
-                uint16 tileData = VRAMRead(BG1BaseAddr + tileNumber);
+                    // To the right of the "&" is the logic for wrapping
+                    uint8 tileX = (hOffset >> 3) & ((BG1SCSize & 0x1) ? 63 : 31);
 
-                if (tileData & 0b0100000000000000)
-                    x = 7 - x;
-                if (tileData & 0b1000000000000000)
-                    y = 7 - y;
-                bg1prior = tileData & 0b0010000000000000;
+                    uint8 x = hOffset & 0x07;
 
-                uint8 pal = (tileData & 0b0001110000000000) >> 10;
-                uint16 chr = tileData & 0b0000001111111111;
-                // 2bpp 8x8 -> 8 -> 3 shift
-                // 4bpp 8x8 -> 16 -> 4 shift
-                // 8bpp 8x8 -> 32 -> 5 shift
-                uint16 tileCharAddr = BG1ChrsBaseAddr + (chr << (3 + (mode > 0) + (mode == 3 || mode == 4)));
+                    // The tileY shift is done in 2 steps to make sure the first bit is 0
+                    uint8 tileS = ((tileY >> 4) & 0x02) | (tileX >> 5);
 
-                uint8 colorIdx = 0;
+                    tileX &= 0x1f;
+                    tileY &= 0x1f;
 
-                colorIdx |= ((VRAMRead(tileCharAddr + y) >> (7 - x)) & 0x01);
+                    if (BG1SCSize == 2 && tileS == 2)
+                    {
+                        tileS = 1;
+                    }
 
-                colorIdx |= ((VRAMRead(tileCharAddr + y) >> (15 - x)) & 0x01) << 1;
+                    uint16 tileNumber = (tileS << 10) + (tileY << 5) + tileX;
 
-                if (mode > 0)
-                {
-                    colorIdx |= ((VRAMRead(tileCharAddr + y + 8) >> (7 - x)) & 0x01) << 2;
-                    colorIdx |= ((VRAMRead(tileCharAddr + y + 8) >> (15 - x)) & 0x01) << 3;
-                }
-                if (mode == 3 || mode == 4)
-                {
-                    colorIdx |= ((VRAMRead(tileCharAddr + y + 16) >> (7 - x)) & 0x01) << 4;
-                    colorIdx |= ((VRAMRead(tileCharAddr + y + 16) >> (15 - x)) & 0x01) << 5;
-                    colorIdx |= ((VRAMRead(tileCharAddr + y + 24) >> (7 - x)) & 0x01) << 6;
-                    colorIdx |= ((VRAMRead(tileCharAddr + y + 24) >> (15 - x)) & 0x01) << 7;
-                }
-                bg1opaque = colorIdx;
+                    uint16 tileData = VRAMRead(BG1BaseAddr + tileNumber);
 
-                switch (mode)
-                {
-                case 0:
-                    bg1col = cgram[pal << 2 | colorIdx]; // + offsets for other BGs
-                    break;
-                case 1:
-                    bg1col = cgram[pal << 4 | colorIdx];
-                    break;
-                case 2:
-                    bg1col = cgram[pal << 4 | colorIdx];
-                    break;
-                case 3:
-                    bg1col = directColor ? colorIdx : cgram[colorIdx];
-                    break;
-                case 4:
-                    bg1col = directColor ? colorIdx : cgram[colorIdx];
-                    break;
-                case 5:
-                    bg1col = cgram[pal << 4 | colorIdx];
-                    break;
-                case 6:
-                    bg1col = cgram[pal << 4 | colorIdx];
-                    break;
+                    if (tileData & 0b0100000000000000)
+                        x = 7 - x;
+                    if (tileData & 0b1000000000000000)
+                        y = 7 - y;
 
-                default:
-                    bg1col = 0;
-                    break;
+                    uint8 tPrior = 0;
+                    if (mode == 0 || mode == 1)
+                        tPrior = (tileData & 0b0010000000000000) ? 11 : 8;
+                    else
+                        tPrior = (tileData & 0b0010000000000000) ? 7 : 3;
+                    if (prior[hCnt] > tPrior)
+                        continue;
+
+                    uint8 pal = (tileData & 0b0001110000000000) >> 10;
+                    uint16 chr = tileData & 0b0000001111111111;
+                    // 2bpp 8x8 -> 8 -> 3 shift
+                    // 4bpp 8x8 -> 16 -> 4 shift
+                    // 8bpp 8x8 -> 32 -> 5 shift
+                    uint16 tileCharAddr = BG1ChrsBaseAddr + (chr << (3 + (mode > 0) + (mode == 3 || mode == 4)));
+
+                    uint8 colorIdx = 0;
+
+                    colorIdx |= ((VRAMRead(tileCharAddr + y) >> (7 - x)) & 0x01);
+
+                    colorIdx |= ((VRAMRead(tileCharAddr + y) >> (15 - x)) & 0x01) << 1;
+
+                    if (mode > 0)
+                    {
+                        colorIdx |= ((VRAMRead(tileCharAddr + y + 8) >> (7 - x)) & 0x01) << 2;
+                        colorIdx |= ((VRAMRead(tileCharAddr + y + 8) >> (15 - x)) & 0x01) << 3;
+                    }
+                    if (mode == 3 || mode == 4)
+                    {
+                        colorIdx |= ((VRAMRead(tileCharAddr + y + 16) >> (7 - x)) & 0x01) << 4;
+                        colorIdx |= ((VRAMRead(tileCharAddr + y + 16) >> (15 - x)) & 0x01) << 5;
+                        colorIdx |= ((VRAMRead(tileCharAddr + y + 24) >> (7 - x)) & 0x01) << 6;
+                        colorIdx |= ((VRAMRead(tileCharAddr + y + 24) >> (15 - x)) & 0x01) << 7;
+                    }
+
+                    if (colorIdx == 0)
+                        continue;
+
+                    uint16 col;
+                    switch (mode)
+                    {
+                    case 0:
+                        col = cgram[pal << 2 | colorIdx]; // + offsets for other BGs
+                        break;
+                    case 1:
+                        col = cgram[pal << 4 | colorIdx];
+                        break;
+                    case 2:
+                        col = cgram[pal << 4 | colorIdx];
+                        break;
+                    case 3:
+                        col = directColor ? colorIdx : cgram[colorIdx];
+                        break;
+                    case 4:
+                        col = directColor ? colorIdx : cgram[colorIdx];
+                        break;
+                    case 5:
+                        col = cgram[pal << 4 | colorIdx];
+                        break;
+                    case 6:
+                        col = cgram[pal << 4 | colorIdx];
+                        break;
+
+                    default:
+                        col = 0;
+                        break;
+                    }
+
+                    if (BG1onMainScreen)
+                        mainLine[hCnt] = col;
+                    if (BG1onSubScreen)
+                        subLine[hCnt] = col;
+                    prior[hCnt] = tPrior;
                 }
             }
 
             if ((BG1onMainScreen || BG1onSubScreen) && mode == 7) // BG1 conditions MODE 7!!!
             {
-
-                uint16 hOffset = (hCounter + BG1HScroll);
-                uint16 vOffset = ((vCounter << interlacing) + BG1VScroll);
 
                 int16_t cx = (centerX & 0x0FFF) | ((centerX & 0x1000) ? 0xF000 : 0x0000);
                 int16_t cy = (centerY & 0x0FFF) | ((centerY & 0x1000) ? 0xF000 : 0x0000);
@@ -1151,512 +1120,325 @@ public:
                 int16_t B = mode7B;
                 int16_t C = mode7C;
                 int16_t D = mode7D;
+                for (int hCnt = 0; hCnt < 256; hCnt++)
+                {
+                    uint16 vOffset = ((vCounter << interlacing) + BG1VScroll);
+                    uint16 hOffset = (hCnt + BG1HScroll);
 
-                uint16 transX = (A / 256.f) * ((int16_t)hOffset - cx) + (B / 256.f) * (vOffset - cy) + cx;
-                uint16 transY = (C / 256.f) * ((int16_t)hOffset - cx) + (D / 256.f) * (vOffset - cy) + cy;
+                    uint16 transX = (A / 256.f) * ((int16_t)hOffset - cx) + (B / 256.f) * (vOffset - cy) + cx;
+                    uint16 transY = (C / 256.f) * ((int16_t)hOffset - cx) + (D / 256.f) * (vOffset - cy) + cy;
 
-                hOffset = transX;
-                vOffset = transY;
-                // Screen is 128x128 tiles of 8x8
+                    hOffset = transX;
+                    vOffset = transY;
+                    // Screen is 128x128 tiles of 8x8
 
-                // To the right of the "&" is the logic for wrapping
-                uint8 tileX = (hOffset >> 3) & 1023;
-                uint8 tileY = (vOffset >> 3) & 1023;
-                uint8 x = hOffset & 0x07;
-                uint8 y = vOffset & 0x07;
+                    // To the right of the "&" is the logic for wrapping
+                    uint8 tileX = (hOffset >> 3) & 1023;
+                    uint8 tileY = (vOffset >> 3) & 1023;
+                    uint8 x = hOffset & 0x07;
+                    uint8 y = vOffset & 0x07;
 
-                tileX &= 0x7f;
-                tileY &= 0x7f;
+                    tileX &= 0x7f;
+                    tileY &= 0x7f;
 
-                uint16 tileNumber = (tileY << 7) + tileX;
+                    uint16 tileNumber = (tileY << 7) + tileX;
 
-                // Mode7's base is always 0x0000
-                uint16 tileData = VRAMRead(tileNumber);
+                    // Mode7's base is always 0x0000
+                    uint16 tileData = VRAMRead(tileNumber);
 
-                uint16 chrName = tileData & 0x00FF;
+                    uint16 chrName = tileData & 0x00FF;
 
-                uint16 tileCharAddr = (chrName << 6);
+                    uint16 tileCharAddr = (chrName << 6);
 
-                uint8 colorIdx = (VRAMRead(tileCharAddr + (y << 3) + x) & 0xFF00) >> 8;
+                    uint8 colorIdx = (VRAMRead(tileCharAddr + (y << 3) + x) & 0xFF00) >> 8;
 
-                bg1opaque = colorIdx;
-                bg1col = directColor ? colorIdx : cgram[colorIdx];
+                    if (colorIdx == 0)
+                        continue;
+
+                    if (BG1onMainScreen)
+                        mainLine[hCnt] = directColor ? colorIdx : cgram[colorIdx];
+                    if (BG1onSubScreen)
+                        subLine[hCnt] = directColor ? colorIdx : cgram[colorIdx];
+                    // prior[hCnt] = bg1prior;
+                }
             }
 
             if ((BG2onMainScreen || BG2onSubScreen) && mode < 6) // BG2 conditions
             {
-
-                uint16 hOffset = (hCounter + BG2HScroll);
                 uint16 vOffset = ((vCounter << interlacing) + BG2VScroll);
 
-                // To the right of the "&" is the logic for wrapping
-                uint8 tileX = (hOffset >> 3) & ((BG2SCSize & 0x1) ? 63 : 31);
-                uint8 tileY = (vOffset >> 3) & ((BG2SCSize & 0x2) ? 63 : 31);
-                uint8 x = hOffset & 0x07;
-                uint8 y = vOffset & 0x07;
-
-                // The tileY shift is done in 2 steps to make sure the first bit is 0
-                uint8 tileS = ((tileY >> 5) << 1) | (tileX >> 5);
-
-                tileX &= 0x1f;
-                tileY &= 0x1f;
-
-                if (BG2SCSize == 2 && tileS == 2)
+                for (int hCnt = 0; hCnt < 256; hCnt++)
                 {
-                    tileS = 1;
+                    uint8 tileY = (vOffset >> 3) & ((BG2SCSize & 0x2) ? 63 : 31);
+
+                    uint8 y = vOffset & 0x07;
+                    uint16 hOffset = (hCnt + BG2HScroll);
+
+                    // To the right of the "&" is the logic for wrapping
+                    uint8 tileX = (hOffset >> 3) & ((BG2SCSize & 0x1) ? 63 : 31);
+
+                    uint8 x = hOffset & 0x07;
+
+                    // The tileY shift is done in 2 steps to make sure the first bit is 0
+                    uint8 tileS = ((tileY >> 5) << 1) | (tileX >> 5);
+
+                    tileX &= 0x1f;
+                    tileY &= 0x1f;
+
+                    if (BG2SCSize == 2 && tileS == 2)
+                    {
+                        tileS = 1;
+                    }
+
+                    // (32*32*tileS)
+                    uint16 tileNumber = (tileS * 32 * 32) + (tileY << 5) + tileX;
+
+                    uint16 tileData = VRAMRead(BG2BaseAddr + tileNumber);
+
+                    if (tileData & 0b0100000000000000)
+                        x = 7 - x;
+                    if (tileData & 0b1000000000000000)
+                        y = 7 - y;
+
+                    uint8 tPrior = 0;
+                    if (mode == 0 || mode == 1)
+                        tPrior = (tileData & 0b0010000000000000) ? 10 : 7;
+                    else
+                        tPrior = (tileData & 0b0010000000000000) ? 5 : 1;
+
+                    if (prior[hCnt] > tPrior)
+                        continue;
+
+                    uint8 pal = (tileData & 0b0001110000000000) >> 10;
+                    uint16 chr = tileData & 0b0000001111111111;
+
+                    // 2bpp 8x8 -> 8 -> 3 shift
+                    // 4bpp 8x8 -> 16 -> 4 shift
+
+                    uint16 tileCharAddr = BG2ChrsBaseAddr + (chr << (3 + (mode == 1 || mode == 2 || mode == 3)));
+
+                    uint8 colorIdx = 0;
+
+                    colorIdx |= ((VRAMRead(tileCharAddr + y) >> (7 - x)) & 0x01);
+
+                    colorIdx |= ((VRAMRead(tileCharAddr + y) >> (15 - x)) & 0x01) << 1;
+
+                    if (mode == 1 || mode == 2 || mode == 3)
+                    {
+                        colorIdx |= ((VRAMRead(tileCharAddr + y + 8) >> (7 - x)) & 0x01) << 2;
+                        colorIdx |= ((VRAMRead(tileCharAddr + y + 8) >> (15 - x)) & 0x01) << 3;
+                    }
+
+                    if (colorIdx == 0)
+                        continue;
+
+                    uint16 colAdd;
+                    switch (mode)
+                    {
+                    case 0:
+                        colAdd = pal << 2 | colorIdx; // + offsets for other BGs
+                        break;
+                    case 1:
+                        colAdd = pal << 4 | colorIdx;
+                        break;
+                    case 2:
+                        colAdd = pal << 4 | colorIdx;
+                        break;
+                    case 3:
+                        colAdd = pal << 4 | colorIdx;
+                        break;
+                    case 4:
+                        colAdd = pal << 2 | colorIdx;
+                        break;
+                    case 5:
+                        colAdd = pal << 2 | colorIdx;
+                        break;
+                    default:
+                        break;
+                    }
+
+                    if (BG2onMainScreen)
+                        mainLine[hCnt] = cgram[colAdd];
+                    if (BG2onSubScreen)
+                        subLine[hCnt] = cgram[colAdd];
+                    prior[hCnt] = tPrior;
                 }
-
-                // (32*32*tileS)
-                uint16 tileNumber = (tileS * 32 * 32) + (tileY << 5) + tileX;
-
-                uint16 tileData = VRAMRead(BG2BaseAddr + tileNumber);
-
-                if (tileData & 0b0100000000000000)
-                    x = 7 - x;
-                if (tileData & 0b1000000000000000)
-                    y = 7 - y;
-                bg2prior = tileData & 0b0010000000000000;
-
-                uint8 pal = (tileData & 0b0001110000000000) >> 10;
-                uint16 chr = tileData & 0b0000001111111111;
-
-                // 2bpp 8x8 -> 8 -> 3 shift
-                // 4bpp 8x8 -> 16 -> 4 shift
-
-                uint16 tileCharAddr = BG2ChrsBaseAddr + (chr << (3 + (mode == 1 || mode == 2 || mode == 3)));
-
-                uint8 colorIdx = 0;
-
-                colorIdx |= ((VRAMRead(tileCharAddr + y) >> (7 - x)) & 0x01);
-
-                colorIdx |= ((VRAMRead(tileCharAddr + y) >> (15 - x)) & 0x01) << 1;
-
-                if (mode == 1 || mode == 2 || mode == 3)
-                {
-                    colorIdx |= ((VRAMRead(tileCharAddr + y + 8) >> (7 - x)) & 0x01) << 2;
-                    colorIdx |= ((VRAMRead(tileCharAddr + y + 8) >> (15 - x)) & 0x01) << 3;
-                }
-
-                uint16 colAdd;
-                switch (mode)
-                {
-                case 0:
-                    colAdd = pal << 2 | colorIdx; // + offsets for other BGs
-                    break;
-                case 1:
-                    colAdd = pal << 4 | colorIdx;
-                    break;
-                case 2:
-                    colAdd = pal << 4 | colorIdx;
-                    break;
-                case 3:
-                    colAdd = pal << 4 | colorIdx;
-                    break;
-                case 4:
-                    colAdd = pal << 2 | colorIdx;
-                    break;
-                case 5:
-                    colAdd = pal << 2 | colorIdx;
-                    break;
-                default:
-                    break;
-                }
-
-                bg2col = cgram[colAdd];
-
-                bg2opaque = colorIdx;
             }
 
             if ((BG3onMainScreen || BG3onSubScreen) && mode < 2) // BG3 conditions
             {
-
-                uint16 hOffset = (hCounter + BG3HScroll);
                 uint16 vOffset = ((vCounter << interlacing) + BG3VScroll);
 
-                // To the right of the "&" is the logic for wrapping
-                uint8 tileX = (hOffset >> 3) & ((BG3SCSize & 0x1) ? 63 : 31);
-                uint8 tileY = (vOffset >> 3) & ((BG3SCSize & 0x2) ? 63 : 31);
-                uint8 x = hOffset & 0x07;
-                uint8 y = vOffset & 0x07;
-
-                // The tileY shift is done in 2 steps to make sure the first bit is 0
-                uint8 tileS = ((tileY >> 5) << 1) | (tileX >> 5);
-
-                tileX &= 0x1f;
-                tileY &= 0x1f;
-
-                if (BG3SCSize == 2 && tileS == 2)
+                for (int hCnt = 0; hCnt < 256; hCnt++)
                 {
-                    tileS = 1;
+                    uint8 tileY = (vOffset >> 3) & ((BG3SCSize & 0x2) ? 63 : 31);
+                    uint8 y = vOffset & 0x07;
+                    uint16 hOffset = (hCnt + BG3HScroll);
+
+                    // To the right of the "&" is the logic for wrapping
+                    uint8 tileX = (hOffset >> 3) & ((BG3SCSize & 0x1) ? 63 : 31);
+                    uint8 x = hOffset & 0x07;
+
+                    // The tileY shift is done in 2 steps to make sure the first bit is 0
+                    uint8 tileS = ((tileY >> 5) << 1) | (tileX >> 5);
+
+                    tileX &= 0x1f;
+                    tileY &= 0x1f;
+
+                    if (BG3SCSize == 2 && tileS == 2)
+                    {
+                        tileS = 1;
+                    }
+                    // (32*32*tileS)
+                    uint16 tileNumber = (tileS << 10) + (tileY << 5) + tileX;
+
+                    uint16 tileData = VRAMRead(BG3BaseAddr + tileNumber);
+
+                    if (tileData & 0b0100000000000000)
+                        x = 7 - x;
+                    if (tileData & 0b1000000000000000)
+                        y = 7 - y;
+
+                    uint8 tPrior = (tileData & 0b0010000000000000) ? 5 : 2;
+                    if (bg3PriorMode)
+                        tPrior = 13;
+
+                    if (prior[hCnt] > tPrior)
+                        continue;
+
+                    uint8 pal = (tileData & 0b0001110000000000) >> 10;
+                    uint16 chr = tileData & 0b0000001111111111;
+
+                    uint16 tileCharAddr = BG3ChrsBaseAddr + chr * 8;
+
+                    uint8 colorIdx = 0;
+
+                    colorIdx |= ((VRAMRead(tileCharAddr + y) >> (7 - x)) & 0x01);
+
+                    colorIdx |= ((VRAMRead(tileCharAddr + y) >> (15 - x)) & 0x01) << 1;
+
+                    if (colorIdx == 0)
+                        continue;
+
+                    uint16 colAdd;
+
+                    colAdd = pal << 2 | colorIdx; // + offsets for other BGs
+
+                    if (BG3onMainScreen)
+                        mainLine[hCnt] = cgram[colAdd];
+                    if (BG3onSubScreen)
+                        subLine[hCnt] = cgram[colAdd];
+                    prior[hCnt] = tPrior;
                 }
-                // (32*32*tileS)
-                uint16 tileNumber = (tileS << 10) + (tileY << 5) + tileX;
-
-                uint16 tileData = VRAMRead(BG3BaseAddr + tileNumber);
-
-                if (tileData & 0b0100000000000000)
-                    x = 7 - x;
-                if (tileData & 0b1000000000000000)
-                    y = 7 - y;
-                bg3prior = tileData & 0b0010000000000000;
-
-                uint8 pal = (tileData & 0b0001110000000000) >> 10;
-                uint16 chr = tileData & 0b0000001111111111;
-
-                uint16 tileCharAddr = BG3ChrsBaseAddr + chr * 8;
-
-                uint8 colorIdx = 0;
-
-                colorIdx |= ((VRAMRead(tileCharAddr + y) >> (7 - x)) & 0x01);
-
-                colorIdx |= ((VRAMRead(tileCharAddr + y) >> (15 - x)) & 0x01) << 1;
-
-                uint16 colAdd;
-
-                colAdd = pal << 2 | colorIdx; // + offsets for other BGs
-
-                bg3col = cgram[colAdd];
-
-                bg3opaque = colorIdx;
             }
 
             if ((BG4onMainScreen || BG4onSubScreen) && mode == 0) // BG4 conditions
             {
-
-                uint16 hOffset = (hCounter + BG4HScroll);
                 uint16 vOffset = ((vCounter << interlacing) + BG4VScroll);
 
-                // To the right of the "&" is the logic for wrapping
-                uint8 tileX = (hOffset >> 3) & ((BG4SCSize & 0x1) ? 63 : 31);
-                uint8 tileY = (vOffset >> 3) & ((BG4SCSize & 0x2) ? 63 : 31);
-                uint8 x = hOffset & 0x07;
-                uint8 y = vOffset & 0x07;
-
-                // The tileY shift is done in 2 steps to make sure the first bit is 0
-                uint8 tileS = ((tileY >> 5) << 1) | (tileX >> 5);
-
-                tileX &= 0x1f;
-                tileY &= 0x1f;
-
-                if (BG4SCSize == 2 && tileS == 2)
+                for (int hCnt = 0; hCnt < 256; hCnt++)
                 {
-                    tileS = 1;
+                    uint8 tileY = (vOffset >> 3) & ((BG4SCSize & 0x2) ? 63 : 31);
+                    uint8 y = vOffset & 0x07;
+                    uint16 hOffset = (hCnt + BG4HScroll);
+
+                    // To the right of the "&" is the logic for wrapping
+                    uint8 tileX = (hOffset >> 3) & ((BG4SCSize & 0x1) ? 63 : 31);
+                    uint8 x = hOffset & 0x07;
+
+                    // The tileY shift is done in 2 steps to make sure the first bit is 0
+                    uint8 tileS = ((tileY >> 5) << 1) | (tileX >> 5);
+
+                    tileX &= 0x1f;
+                    tileY &= 0x1f;
+
+                    if (BG4SCSize == 2 && tileS == 2)
+                    {
+                        tileS = 1;
+                    }
+                    // (32*32*tileS)
+                    uint16 tileNumber = (tileS << 10) + (tileY << 5) + tileX;
+
+                    uint16 tileData = VRAMRead(BG4BaseAddr + tileNumber);
+
+                    if (tileData & 0b0100000000000000)
+                        x = 7 - x;
+                    if (tileData & 0b1000000000000000)
+                        y = 7 - y;
+
+                    uint8 tPrior = (tileData & 0b0010000000000000) ? 4 : 1;
+
+                    if (prior[hCnt] > tPrior)
+                        continue;
+
+                    uint8 pal = (tileData & 0b0001110000000000) >> 10;
+                    uint16 chr = tileData & 0b0000001111111111;
+
+                    uint16 tileCharAddr = BG4ChrsBaseAddr + chr * 8;
+
+                    uint8 colorIdx = 0;
+
+                    colorIdx |= ((VRAMRead(tileCharAddr + y) >> (7 - x)) & 0x01);
+
+                    colorIdx |= ((VRAMRead(tileCharAddr + y) >> (15 - x)) & 0x01) << 1;
+
+                    if (colorIdx == 0)
+                        continue;
+
+                    uint16 colAdd;
+
+                    colAdd = pal << 2 | colorIdx; // + offsets for other BGs
+
+                    if (BG4onMainScreen)
+                        mainLine[hCnt] = cgram[colAdd];
+                    if (BG4onSubScreen)
+                        subLine[hCnt] = cgram[colAdd];
+                    prior[hCnt] = tPrior;
                 }
-                // (32*32*tileS)
-                uint16 tileNumber = (tileS << 10) + (tileY << 5) + tileX;
-
-                uint16 tileData = VRAMRead(BG4BaseAddr + tileNumber);
-
-                if (tileData & 0b0100000000000000)
-                    x = 7 - x;
-                if (tileData & 0b1000000000000000)
-                    y = 7 - y;
-                bg4prior = tileData & 0b0010000000000000;
-
-                uint8 pal = (tileData & 0b0001110000000000) >> 10;
-                uint16 chr = tileData & 0b0000001111111111;
-
-                uint16 tileCharAddr = BG4ChrsBaseAddr + chr * 8;
-
-                uint8 colorIdx = 0;
-
-                colorIdx |= ((VRAMRead(tileCharAddr + y) >> (7 - x)) & 0x01);
-
-                colorIdx |= ((VRAMRead(tileCharAddr + y) >> (15 - x)) & 0x01) << 1;
-
-                uint16 colAdd;
-
-                colAdd = pal << 2 | colorIdx; // + offsets for other BGs
-
-                bg4col = cgram[colAdd];
-
-                bg4opaque = colorIdx;
             }
 
-            uint16 mainScreenCol = scol;
-            uint16 subScreenCol = scol;
+            int16_t mainR;
+            int16_t mainG;
+            int16_t mainB;
 
-            if (mode == 0 || mode == 1)
+            for (int hCnt = 0; hCnt < 256; hCnt++)
             {
-                if (BG3onSubScreen && bg3opaque && bg3PriorMode && bg3prior)
-                {
-                    subScreenCol = bg3col;
-                }
-                else if (OBJonSubScreen && objopaque && ojbprior == 3)
-                {
-                    subScreenCol = objcol;
-                }
-                else if (BG1onSubScreen && bg1opaque && bg1prior)
-                {
-                    subScreenCol = bg1col;
-                }
-                else if (BG2onSubScreen && bg2opaque && bg2prior)
-                {
-                    subScreenCol = bg2col;
-                }
-                else if (OBJonSubScreen && objopaque && ojbprior == 2)
-                {
-                    subScreenCol = objcol;
-                }
-                else if (BG1onSubScreen && bg1opaque)
-                {
-                    subScreenCol = bg1col;
-                }
-                else if (BG2onSubScreen && bg2opaque)
-                {
-                    subScreenCol = bg2col;
-                }
-                else if (OBJonSubScreen && objopaque && ojbprior == 1)
-                {
-                    subScreenCol = objcol;
-                }
-                else if (BG3onSubScreen && bg3opaque && bg3prior)
-                {
-                    subScreenCol = bg3col;
-                }
-                else if (BG4onSubScreen && bg4opaque && bg4prior)
-                {
-                    subScreenCol = bg4col;
-                }
-                else if (OBJonSubScreen && objopaque && ojbprior == 0)
-                {
-                    subScreenCol = objcol;
-                }
-                else if (BG3onSubScreen && bg3opaque)
-                {
-                    subScreenCol = bg3col;
-                }
-                else if (BG4onSubScreen && bg4opaque)
-                {
-                    subScreenCol = bg4col;
-                }
-                else
-                {
-                    subScreenCol = scol;
-                }
+                uint16 selectedCol = constColorSel ? constColor : subLine[hCnt];
+                uint8 R = (selectedCol & 0b0000000000011111) >> 0;
+                uint8 G = (selectedCol & 0b0000001111100000) >> 5;
+                uint8 B = (selectedCol & 0b0111110000000000) >> 10;
+
+                mainR = ((mainLine[hCnt] & 0b0000000000011111) >> 0);
+                mainG = ((mainLine[hCnt] & 0b0000001111100000) >> 5);
+                mainB = ((mainLine[hCnt] & 0b0111110000000000) >> 10);
+
+                // mainR = mainR + (addSub ? -R : R);
+                // mainR = mainR > 31 ? 31 : mainR;
+                // mainR = mainR < 0 ? 0 : mainR;
+                // mainR = mainR >> (addSubHalf ? 1 : 0);
+
+                // mainG = mainG + (addSub ? -G : G);
+                // mainG = mainG > 31 ? 31 : mainG;
+                // mainG = mainG < 0 ? 0 : mainG;
+                // mainG = mainG >> (addSubHalf ? 1 : 0);
+
+                // mainB = mainB + (addSub ? -B : B);
+                // mainB = mainB > 31 ? 31 : mainB;
+                // mainB = mainB < 0 ? 0 : mainB;
+                // mainB = mainB >> (addSubHalf ? 1 : 0);
+
+                uint8 fade = ((15 - fadeValue) << 4);
+                mainR = (mainR << 3);
+                mainR = fade > mainR ? 0 : (mainR - fade);
+
+                mainG = (mainG << 3);
+                mainG = fade > mainG ? 0 : (mainG - fade);
+
+                mainB = (mainB << 3);
+                mainB = fade > mainB ? 0 : (mainB - fade);
+
+                fb[FB_WIDTH * vCounter + hCnt] = forceBlank ? 0 : MFB_ARGB(255, mainR, mainG, mainB);
             }
-            else
-            {
-
-                if (OBJonSubScreen && objopaque && ojbprior == 3)
-                {
-                    subScreenCol = objcol;
-                }
-                else if (BG1onSubScreen && bg1opaque && bg1prior)
-                {
-                    subScreenCol = bg1col;
-                }
-                else if (OBJonSubScreen && objopaque && ojbprior == 2)
-                {
-                    subScreenCol = objcol;
-                }
-                else if (BG2onSubScreen && bg2opaque && bg2prior)
-                {
-                    subScreenCol = bg2col;
-                }
-                else if (OBJonSubScreen && objopaque && ojbprior == 1)
-                {
-                    subScreenCol = objcol;
-                }
-                else if (BG1onSubScreen && bg1opaque)
-                {
-                    subScreenCol = bg1col;
-                }
-                else if (OBJonSubScreen && objopaque && ojbprior == 0)
-                {
-                    subScreenCol = objcol;
-                }
-                else if (BG2onSubScreen && bg2opaque)
-                {
-                    subScreenCol = bg2col;
-                }
-                else
-                {
-                    subScreenCol = scol;
-                }
-            }
-
-            uint8 selectedLayer = 0;
-            // Priority checking
-            if (mode == 0 || mode == 1)
-            {
-                if (BG3onMainScreen && bg3opaque && bg3PriorMode && bg3prior)
-                {
-                    mainScreenCol = bg3col;
-                    selectedLayer = 3;
-                }
-                else if (OBJonMainScreen && objopaque && ojbprior == 3)
-                {
-                    mainScreenCol = objcol;
-                    selectedLayer = 5;
-                }
-                else if (BG1onMainScreen && bg1opaque && bg1prior)
-                {
-                    mainScreenCol = bg1col;
-                    selectedLayer = 1;
-                }
-                else if (BG2onMainScreen && bg2opaque && bg2prior)
-                {
-                    mainScreenCol = bg2col;
-                    selectedLayer = 2;
-                }
-                else if (OBJonMainScreen && objopaque && ojbprior == 2)
-                {
-                    mainScreenCol = objcol;
-                    selectedLayer = 5;
-                }
-                else if (BG1onMainScreen && bg1opaque)
-                {
-                    mainScreenCol = bg1col;
-                    selectedLayer = 1;
-                }
-                else if (BG2onMainScreen && bg2opaque)
-                {
-                    mainScreenCol = bg2col;
-                    selectedLayer = 2;
-                }
-                else if (OBJonMainScreen && objopaque && ojbprior == 1)
-                {
-                    mainScreenCol = objcol;
-                    selectedLayer = 5;
-                }
-                else if (BG3onMainScreen && bg3opaque && bg3prior)
-                {
-                    mainScreenCol = bg3col;
-                    selectedLayer = 3;
-                }
-                else if (BG4onMainScreen && bg4opaque && bg4prior)
-                {
-                    mainScreenCol = bg4col;
-                    selectedLayer = 4;
-                }
-                else if (OBJonMainScreen && objopaque && ojbprior == 0)
-                {
-                    mainScreenCol = objcol;
-                    selectedLayer = 5;
-                }
-                else if (BG3onMainScreen && bg3opaque)
-                {
-                    mainScreenCol = bg3col;
-                    selectedLayer = 3;
-                }
-                else if (BG4onMainScreen && bg4opaque)
-                {
-                    mainScreenCol = bg4col;
-                    selectedLayer = 4;
-                }
-                else
-                {
-                    mainScreenCol = scol;
-                    selectedLayer = 0;
-                }
-            }
-            else
-            {
-
-                if (OBJonMainScreen && objopaque && ojbprior == 3)
-                {
-                    mainScreenCol = objcol;
-                    selectedLayer = 5;
-                }
-                else if (BG1onMainScreen && bg1opaque && bg1prior)
-                {
-                    mainScreenCol = bg1col;
-                    selectedLayer = 1;
-                }
-                else if (OBJonMainScreen && objopaque && ojbprior == 2)
-                {
-                    mainScreenCol = objcol;
-                    selectedLayer = 5;
-                }
-                else if (BG2onMainScreen && bg2opaque && bg2prior)
-                {
-                    mainScreenCol = bg2col;
-                    selectedLayer = 2;
-                }
-                else if (OBJonMainScreen && objopaque && ojbprior == 1)
-                {
-                    mainScreenCol = objcol;
-                    selectedLayer = 5;
-                }
-                else if (BG1onMainScreen && bg1opaque)
-                {
-                    mainScreenCol = bg1col;
-                    selectedLayer = 1;
-                }
-                else if (OBJonMainScreen && objopaque && ojbprior == 0)
-                {
-                    mainScreenCol = objcol;
-                    selectedLayer = 5;
-                }
-                else if (BG2onMainScreen && bg2opaque)
-                {
-                    mainScreenCol = bg2col;
-                    selectedLayer = 2;
-                }
-                else
-                {
-                    mainScreenCol = scol;
-                    selectedLayer = 0;
-                }
-            }
-
-            if (bgFilter == 1)
-                mainScreenCol = bg1col;
-            else if (bgFilter == 2)
-                mainScreenCol = bg2col;
-            else if (bgFilter == 3)
-                mainScreenCol = bg3col;
-            else if (bgFilter == 4)
-                mainScreenCol = bg4col;
-            else if (bgFilter == 5)
-                mainScreenCol = objcol;
-
-            // if(mode == 7)
-            //     mainScreenCol = 0;
-
-            int16_t mainR = ((mainScreenCol & 0b0000000000011111) >> 0);
-            int16_t mainG = ((mainScreenCol & 0b0000001111100000) >> 5);
-            int16_t mainB = ((mainScreenCol & 0b0111110000000000) >> 10);
-
-            uint16 selectedCol = constColorSel ? constColor : subScreenCol;
-            uint8 R = (selectedCol & 0b0000000000011111) >> 0;
-            uint8 G = (selectedCol & 0b0000001111100000) >> 5;
-            uint8 B = (selectedCol & 0b0111110000000000) >> 10;
-
-            if ((selectedLayer == 0 && bdpAddSub) || (selectedLayer == 1 && bg1AddSub) || (selectedLayer == 2 && bg2AddSub) ||
-                (selectedLayer == 3 && bg3AddSub) || (selectedLayer == 4 && bg4AddSub) || (selectedLayer == 5 && objAddSub))
-            {
-
-                mainR = mainR + (addSub ? -R : R);
-                mainR = mainR > 31 ? 31 : mainR;
-                mainR = mainR < 0 ? 0 : mainR;
-                mainR = mainR >> (addSubHalf ? 1 : 0);
-
-                mainG = mainG + (addSub ? -G : G);
-                mainG = mainG > 31 ? 31 : mainG;
-                mainG = mainG < 0 ? 0 : mainG;
-                mainG = mainG >> (addSubHalf ? 1 : 0);
-
-                mainB = mainB + (addSub ? -B : B);
-                mainB = mainB > 31 ? 31 : mainB;
-                mainB = mainB < 0 ? 0 : mainB;
-                mainB = mainB >> (addSubHalf ? 1 : 0);
-            }
-
-            uint8 fade = ((15 - fadeValue) << 4);
-            mainR = (mainR << 3);
-            mainR = fade > mainR ? 0 : (mainR - fade);
-
-            mainG = (mainG << 3);
-            mainG = fade > mainG ? 0 : (mainG - fade);
-
-            mainB = (mainB << 3);
-            mainB = fade > mainB ? 0 : (mainB - fade);
-
-            // cout << "RGB : (" << dec << (unsigned int)R << "," << (unsigned int)G << "," << (unsigned int)B << ")" << endl;
-
-            fb[FB_WIDTH * vCounter + hCounter] = forceBlank ? 0 : MFB_ARGB(255, mainR, mainG, mainB);
         }
 
         // hCnt from 0 to 339

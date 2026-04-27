@@ -125,7 +125,6 @@ void emu()
     while (true) // Emulation Loop
     {
 
-        
         if ((pauseEmu || ppu->pauseEmu) && !runStep && !runVBlank && !runInst && !runHBlank)
         {
             mfb_update_events(window);
@@ -135,7 +134,7 @@ void emu()
         if (!dma->dmaActive)
         {
 
-            if (emuStep % 12 == 0)
+            if (emuStep % 16 == 0)
             {
                 runInst = false;
                 if (debug)
@@ -152,12 +151,12 @@ void emu()
 
                 auto end = chrono::steady_clock::now();
                 cpuTime += chrono::duration_cast<std::chrono::nanoseconds>(end - start).count();
-                //if(cpu->cregs.PC == 0xfa88 && cpu->cregs.K == 0x09)
-                //    pauseEmu = true;
+                // if(cpu->cregs.PC == 0xfa88 && cpu->cregs.K == 0x09)
+                //     pauseEmu = true;
             }
         }
 
-        if (emuStep % 2 == 0)
+        if (emuStep % 1 == 0)
         {
             auto start = chrono::steady_clock::now();
             dma->step(!hdmaRan);
@@ -187,149 +186,145 @@ void emu()
         }
 
         vBlankEntryMoment = false;
-        if (emuStep)
+
+        auto start = chrono::steady_clock::now();
+        ppu->step(); // every 341*262 = 89342 steps => 1 frame
+        auto end = chrono::steady_clock::now();
+        ppuTime += chrono::duration_cast<std::chrono::nanoseconds>(end - start).count();
+
+        if (ppu->hCounter == 0 && ppu->vCounter == 225) // Start of VBlank
         {
+            // dma->HDMAEN = 0;
+            vBlankEntryMoment = true;
+            runVBlank = false;
+            RDNMI = 0b10000000;
+            if (NMITIMEN & 0b10000000) // NMI is enabled
+                cpu->invokeNMI();
 
-            auto start = chrono::steady_clock::now();
-            ppu->step(); // every 341*262 = 89342 steps => 1 frame
+            // for (int y = 0; y < FB_HEIGHT * (WIN_WIDTH / FB_WIDTH); y++)
+            // {
+            //     for (int x = 0; x < WIN_WIDTH; x++)
+            //     {
+            //         window_fb[y * WIN_WIDTH + x] = ppu->fb[(y / (WIN_WIDTH / FB_WIDTH)) * FB_WIDTH + (x / (WIN_WIDTH / FB_WIDTH))];
+            //     }
+            // }
+
+            start = chrono::steady_clock::now();
+            for (int sy = 0; sy < FB_HEIGHT; sy++)
+            {
+                int src_row_idx = sy * FB_WIDTH;
+                int dest_row_idx = sy * SCALE * WIN_WIDTH;
+
+                // 1. Scale a single row horizontally
+                for (int sx = 0; sx < FB_WIDTH; sx++)
+                {
+                    auto pixel = ppu->fb[src_row_idx + sx];
+                    int dx = sx * SCALE;
+
+                    // Because SCALE is a compile-time constant, the compiler will
+                    // unroll this loop automatically (e.g., if SCALE is 3, it writes 3 times directly)
+                    for (int i = 0; i < SCALE; i++)
+                    {
+                        window_fb[dest_row_idx + dx + i] = pixel;
+                    }
+                }
+
+                // 2. Duplicate that scaled row vertically
+                for (int dy = 1; dy < SCALE; dy++)
+                {
+                    memcpy(&window_fb[dest_row_idx + (dy * WIN_WIDTH)],
+                           &window_fb[dest_row_idx],
+                           WIN_WIDTH * sizeof(window_fb[0]));
+                }
+            }
+
+            for (int y = FB_HEIGHT * (WIN_WIDTH / FB_WIDTH); y < (FB_HEIGHT + 1) * (WIN_WIDTH / FB_WIDTH); y++)
+            {
+                for (int x = 0; x < WIN_WIDTH; x++)
+                {
+
+                    uint16 col = ppu->cgram[x / (WIN_WIDTH / FB_WIDTH)];
+
+                    uint8 R = (col & 0b0000000000011111) << 3;
+                    uint8 G = (col & 0b0000001111100000) >> 2;
+                    uint8 B = (col & 0b0111110000000000) >> 7;
+
+                    window_fb[y * WIN_WIDTH + x] = MFB_ARGB(255, R, G, B);
+                }
+            }
+
+            mfb_update_ex(window, window_fb, WIN_WIDTH, WIN_HEIGHT);
+            mfb_set_title(window, to_string(ppu->frameCount).c_str());
+            mfb_wait_sync(window);
             auto end = chrono::steady_clock::now();
-            ppuTime += chrono::duration_cast<std::chrono::nanoseconds>(end - start).count();
+            drawTime += chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
 
-            if (ppu->hCounter == 0 && ppu->vCounter == 225) // Start of VBlank
-            {
-                // dma->HDMAEN = 0;
-                vBlankEntryMoment = true;
-                runVBlank = false;
-                RDNMI = 0b10000000;
-                if (NMITIMEN & 0b10000000) // NMI is enabled
-                    cpu->invokeNMI();
-
-                // for (int y = 0; y < FB_HEIGHT * (WIN_WIDTH / FB_WIDTH); y++)
-                // {
-                //     for (int x = 0; x < WIN_WIDTH; x++)
-                //     {
-                //         window_fb[y * WIN_WIDTH + x] = ppu->fb[(y / (WIN_WIDTH / FB_WIDTH)) * FB_WIDTH + (x / (WIN_WIDTH / FB_WIDTH))];
-                //     }
-                // }
-                
-                start = chrono::steady_clock::now();
-                for (int sy = 0; sy < FB_HEIGHT; sy++)
-                {
-                    int src_row_idx = sy * FB_WIDTH;
-                    int dest_row_idx = sy * SCALE * WIN_WIDTH;
-
-                    // 1. Scale a single row horizontally
-                    for (int sx = 0; sx < FB_WIDTH; sx++)
-                    {
-                        auto pixel = ppu->fb[src_row_idx + sx];
-                        int dx = sx * SCALE;
-
-                        // Because SCALE is a compile-time constant, the compiler will
-                        // unroll this loop automatically (e.g., if SCALE is 3, it writes 3 times directly)
-                        for (int i = 0; i < SCALE; i++)
-                        {
-                            window_fb[dest_row_idx + dx + i] = pixel;
-                        }
-                    }
-
-                    // 2. Duplicate that scaled row vertically
-                    for (int dy = 1; dy < SCALE; dy++)
-                    {
-                        memcpy(&window_fb[dest_row_idx + (dy * WIN_WIDTH)],
-                               &window_fb[dest_row_idx],
-                               WIN_WIDTH * sizeof(window_fb[0]));
-                    }
-                }
-
-                for (int y = FB_HEIGHT * (WIN_WIDTH / FB_WIDTH); y < (FB_HEIGHT + 1) * (WIN_WIDTH / FB_WIDTH); y++)
-                {
-                    for (int x = 0; x < WIN_WIDTH; x++)
-                    {
-
-                        uint16 col = ppu->cgram[x / (WIN_WIDTH / FB_WIDTH)];
-
-                        uint8 R = (col & 0b0000000000011111) << 3;
-                        uint8 G = (col & 0b0000001111100000) >> 2;
-                        uint8 B = (col & 0b0111110000000000) >> 7;
-
-                        window_fb[y * WIN_WIDTH + x] = MFB_ARGB(255, R, G, B);
-                    }
-                }
-
-                mfb_update_ex(window, window_fb, WIN_WIDTH, WIN_HEIGHT);
-                mfb_set_title(window, to_string(ppu->frameCount).c_str());
-                mfb_wait_sync(window);
-                auto end = chrono::steady_clock::now();
-                drawTime +=  chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
-                
-
-                 start = chrono::steady_clock::now();
-                cout << "==================TIMING================" << endl;
-                cout << "Frame Time : " << dec << chrono::duration_cast<std::chrono::milliseconds>(chrono::steady_clock::now() - frameTime).count() << endl;
-                frameTime = chrono::steady_clock::now();
-                cout << "CPU Time : " << dec << cpuTime / 1000000 << endl;
-                cout << "PPU Time : " << dec << ppuTime / 1000000 << endl;
-                cout << "APU Time : " << dec << apuTime / 1000000 << endl;
-                cout << "Ctrl Time : " << dec << ctrlTime / 1000000 << endl;
-                cout << "DMA Time : " << dec << dmaTime / 1000000 << endl;
-                cout << "Other Time : " << dec << otherTime / 1000000 << endl;
-                cout << "Draw Time : " << dec << drawTime / 1000000 << endl;
-                end = chrono::steady_clock::now();
-                cout << "Debug : " << dec << chrono::duration_cast<std::chrono::nanoseconds>(end - start).count()/1000000 << endl;
-                cpuTime = 0;
-                ppuTime = 0;
-                apuTime = 0;
-                ctrlTime = 0;
-                dmaTime = 0;
-                otherTime = 0;
-                drawTime = 0;
-            }
-
-             start = chrono::steady_clock::now();
-
-            if (ppu->vCounter == 261 && ppu->hCounter == 340) // End of VBlank
-            {
-                RDNMI = 0b00000000;
-            }
-            if (ppu->vCounter < 225 && ppu->hCounter == 256) // Start of HBlank
-            {
-                hdmaRan = false;
-                runHBlank = false;
-            }
-            if (ppu->hCounter == 0 && ppu->vCounter == 0) // Start of Frame
-            {
-                dma->initializeHDMA();
-            }
-
-            // H-V Timer IRQ
-            uint8 type = (NMITIMEN & 0b00110000) >> 4;
-
-            switch (type)
-            {
-            case 0:
-                break;
-            case 1:
-                TIMEUP = 0b10000000;
-                if ((HTIMEH << 8 | HTIMEL) == ppu->hCounter)
-                    cpu->invokeIRQ();
-                break;
-            case 2:
-                TIMEUP = 0b10000000;
-                if ((VTIMEH << 8 | VTIMEL) == ppu->vCounter && ppu->hCounter == 0)
-                    cpu->invokeIRQ();
-                break;
-            case 3:
-                TIMEUP = 0b10000000;
-                if ((VTIMEH << 8 | VTIMEL) == ppu->vCounter && ppu->hCounter == (HTIMEH << 8 | HTIMEL))
-                    cpu->invokeIRQ();
-                break;
-
-            default:
-                break;
-            }
-             end = chrono::steady_clock::now();
-            otherTime += chrono::duration_cast<std::chrono::nanoseconds>(end - start).count();
+            start = chrono::steady_clock::now();
+            cout << "==================TIMING================" << endl;
+            cout << "Frame Time : " << dec << chrono::duration_cast<std::chrono::milliseconds>(chrono::steady_clock::now() - frameTime).count() << endl;
+            frameTime = chrono::steady_clock::now();
+            cout << "CPU Time : " << dec << cpuTime / 1000000 << endl;
+            cout << "PPU Time : " << dec << ppuTime / 1000000 << endl;
+            cout << "APU Time : " << dec << apuTime / 1000000 << endl;
+            cout << "Ctrl Time : " << dec << ctrlTime / 1000000 << endl;
+            cout << "DMA Time : " << dec << dmaTime / 1000000 << endl;
+            cout << "Other Time : " << dec << otherTime / 1000000 << endl;
+            cout << "Draw Time : " << dec << drawTime / 1000000 << endl;
+            end = chrono::steady_clock::now();
+            cout << "Debug : " << dec << chrono::duration_cast<std::chrono::nanoseconds>(end - start).count() / 1000000 << endl;
+            cpuTime = 0;
+            ppuTime = 0;
+            apuTime = 0;
+            ctrlTime = 0;
+            dmaTime = 0;
+            otherTime = 0;
+            drawTime = 0;
         }
+
+        start = chrono::steady_clock::now();
+
+        if (ppu->vCounter == 261 && ppu->hCounter == 340) // End of VBlank
+        {
+            RDNMI = 0b00000000;
+        }
+        if (ppu->vCounter < 225 && ppu->hCounter == 256) // Start of HBlank
+        {
+            hdmaRan = false;
+            runHBlank = false;
+        }
+        if (ppu->hCounter == 0 && ppu->vCounter == 0) // Start of Frame
+        {
+            dma->initializeHDMA();
+        }
+
+        // H-V Timer IRQ
+        uint8 type = (NMITIMEN & 0b00110000) >> 4;
+
+        switch (type)
+        {
+        case 0:
+            break;
+        case 1:
+            TIMEUP = 0b10000000;
+            if ((HTIMEH << 8 | HTIMEL) == ppu->hCounter)
+                cpu->invokeIRQ();
+            break;
+        case 2:
+            TIMEUP = 0b10000000;
+            if ((VTIMEH << 8 | VTIMEL) == ppu->vCounter && ppu->hCounter == 0)
+                cpu->invokeIRQ();
+            break;
+        case 3:
+            TIMEUP = 0b10000000;
+            if ((VTIMEH << 8 | VTIMEL) == ppu->vCounter && ppu->hCounter == (HTIMEH << 8 | HTIMEL))
+                cpu->invokeIRQ();
+            break;
+
+        default:
+            break;
+        }
+        end = chrono::steady_clock::now();
+        otherTime += chrono::duration_cast<std::chrono::nanoseconds>(end - start).count();
 
         emuStep++;
         runStep = false;
@@ -460,16 +455,6 @@ void keyboard_callback(struct mfb_window *window, mfb_key key, mfb_key_mod mod, 
         if (key == KB_KEY_F6)
         {
             ppu->bgFilter = 0;
-        }
-
-        // Controller
-        if (key == KB_KEY_Z)
-        {
-            ctrlsys->KeyPress(15); // B
-        }
-        if (key == KB_KEY_SPACE)
-        {
-            ctrlsys->KeyPress(12); // S
         }
     }
     // Controller
