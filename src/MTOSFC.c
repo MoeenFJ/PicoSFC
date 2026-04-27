@@ -2,7 +2,7 @@
 #include <stdlib.h>
 #include <stdint.h>
 #include <string.h>
-//#include <MiniFB.h>
+#include <MiniFB.h>
 
 // const int SCALE = 3;
 // const int WIN_WIDTH = 256 * SCALE;
@@ -55,8 +55,8 @@ uint8 WMADDH; // 0x2183
 
 // GUI
 
-//struct mfb_window *window;
-//uint32_t window_fb[WIN_WIDTH * WIN_HEIGHT];
+struct mfb_window *window;
+uint32_t window_fb[WIN_WIDTH * WIN_HEIGHT];
 #pragma endregion
 
 #pragma region APU_Vars
@@ -248,7 +248,7 @@ typedef struct
     bool objVF;
 } PPUObject;
 
-//uint32_t fb[FB_WIDTH * FB_HEIGHT];
+uint32_t fb[FB_WIDTH * FB_HEIGHT];
 
 // VRam
 uint16 vram[32 * 1024] = {0};
@@ -494,7 +494,7 @@ uint8 state = 0;
 void exitEmu()
 {
 
-    //mfb_close(window);
+    mfb_close(window);
     exit(0);
 }
 
@@ -8025,7 +8025,7 @@ void PPU_Step()
             mainB = (mainB << 3);
             mainB = fade > mainB ? 0 : (mainB - fade);
 
-            //fb[FB_WIDTH * vCounter + hCnt] = forceBlank ? 0 : MFB_ARGB(255, mainR, mainG, mainB);
+            fb[FB_WIDTH * vCounter + hCnt] = forceBlank ? 0 : MFB_ARGB(255, mainR, mainG, mainB);
         }
     }
 
@@ -8917,7 +8917,7 @@ void emu()
     HTIMEH = 0x01;
     RDNMI = RDNMI & 0x7F;
 
-    while (1) // Emulation Loop
+    while (true) // Emulation Loop
     {
 
         if (!dmaActive)
@@ -8935,7 +8935,7 @@ void emu()
             DMA_Step(!hdmaRan);
             if (!hdmaRan)
             {
-                hdmaRan = 1;
+                hdmaRan = true;
             }
         }
 
@@ -8950,14 +8950,14 @@ void emu()
             CTRL_Step();
         }
 
-        vBlankEntryMoment = 0;
+        vBlankEntryMoment = false;
 
         PPU_Step();
 
         if (hCounter == 0 && vCounter == 225) // Start of VBlank
         {
 
-            vBlankEntryMoment = 1;
+            vBlankEntryMoment = true;
             RDNMI = 0b10000000;
             if (NMITIMEN & 0b10000000) // NMI is enabled
                 invokeNMI(); 
@@ -8970,52 +8970,52 @@ void emu()
             //     }
             // }
 
-            // for (int sy = 0; sy < FB_HEIGHT; sy++)
-            // {
-            //     int src_row_idx = sy * FB_WIDTH;
-            //     int dest_row_idx = sy * SCALE * WIN_WIDTH;
+            for (int sy = 0; sy < FB_HEIGHT; sy++)
+            {
+                int src_row_idx = sy * FB_WIDTH;
+                int dest_row_idx = sy * SCALE * WIN_WIDTH;
 
-            //     // 1. Scale a single row horizontally
-            //     for (int sx = 0; sx < FB_WIDTH; sx++)
-            //     {
-            //         auto pixel = fb[src_row_idx + sx];
-            //         int dx = sx * SCALE;
+                // 1. Scale a single row horizontally
+                for (int sx = 0; sx < FB_WIDTH; sx++)
+                {
+                    auto pixel = fb[src_row_idx + sx];
+                    int dx = sx * SCALE;
 
-            //         // Because SCALE is a compile-time constant, the compiler will
-            //         // unroll this loop automatically (e.g., if SCALE is 3, it writes 3 times directly)
-            //         for (int i = 0; i < SCALE; i++)
-            //         {
-            //             window_fb[dest_row_idx + dx + i] = pixel;
-            //         }
-            //     }
+                    // Because SCALE is a compile-time constant, the compiler will
+                    // unroll this loop automatically (e.g., if SCALE is 3, it writes 3 times directly)
+                    for (int i = 0; i < SCALE; i++)
+                    {
+                        window_fb[dest_row_idx + dx + i] = pixel;
+                    }
+                }
 
-            //     // 2. Duplicate that scaled row vertically
-            //     for (int dy = 1; dy < SCALE; dy++)
-            //     {
-            //         memcpy(&window_fb[dest_row_idx + (dy * WIN_WIDTH)],
-            //                &window_fb[dest_row_idx],
-            //                WIN_WIDTH * sizeof(window_fb[0]));
-            //     }
-            // }
+                // 2. Duplicate that scaled row vertically
+                for (int dy = 1; dy < SCALE; dy++)
+                {
+                    memcpy(&window_fb[dest_row_idx + (dy * WIN_WIDTH)],
+                           &window_fb[dest_row_idx],
+                           WIN_WIDTH * sizeof(window_fb[0]));
+                }
+            }
 
-            // for (int y = FB_HEIGHT * (WIN_WIDTH / FB_WIDTH); y < (FB_HEIGHT + 1) * (WIN_WIDTH / FB_WIDTH); y++)
-            // {
-            //     for (int x = 0; x < WIN_WIDTH; x++)
-            //     {
+            for (int y = FB_HEIGHT * (WIN_WIDTH / FB_WIDTH); y < (FB_HEIGHT + 1) * (WIN_WIDTH / FB_WIDTH); y++)
+            {
+                for (int x = 0; x < WIN_WIDTH; x++)
+                {
 
-            //         uint16 col = cgram[x / (WIN_WIDTH / FB_WIDTH)];
+                    uint16 col = cgram[x / (WIN_WIDTH / FB_WIDTH)];
 
-            //         uint8 R = (col & 0b0000000000011111) << 3;
-            //         uint8 G = (col & 0b0000001111100000) >> 2;
-            //         uint8 B = (col & 0b0111110000000000) >> 7;
+                    uint8 R = (col & 0b0000000000011111) << 3;
+                    uint8 G = (col & 0b0000001111100000) >> 2;
+                    uint8 B = (col & 0b0111110000000000) >> 7;
 
-            //         window_fb[y * WIN_WIDTH + x] = MFB_ARGB(255, R, G, B);
-            //     }
-            // }
+                    window_fb[y * WIN_WIDTH + x] = MFB_ARGB(255, R, G, B);
+                }
+            }
 
-            // mfb_update_ex(window, window_fb, WIN_WIDTH, WIN_HEIGHT);
-            // mfb_set_title(window, "wee");
-            // mfb_wait_sync(window);
+            mfb_update_ex(window, window_fb, WIN_WIDTH, WIN_HEIGHT);
+            mfb_set_title(window, "wee");
+            mfb_wait_sync(window);
         }
 
         if (vCounter == 261 && hCounter == 340) // End of VBlank
@@ -9528,7 +9528,7 @@ uint8 ReadBus(add24 address)
     return 0;
 }
 
-/*
+
 void keyboard_callback(struct mfb_window *window, mfb_key key, mfb_key_mod mod, bool is_pressed)
 {
     if (is_pressed)
@@ -9610,7 +9610,7 @@ void keyboard_callback(struct mfb_window *window, mfb_key key, mfb_key_mod mod, 
             CTRL_KeyRelease(10);
     }
 }
-*/
+
 
 int main(int argc, char *argv[])
 {
@@ -9638,9 +9638,9 @@ int main(int argc, char *argv[])
     //     sramFile.close();
     // }
 
-    //window = mfb_open_ex("MTOSFC", WIN_WIDTH, WIN_HEIGHT, 0);
-    //mfb_set_target_fps(240);
-    //mfb_set_keyboard_callback(window, keyboard_callback);
+    window = mfb_open_ex("MTOSFC", WIN_WIDTH, WIN_HEIGHT, 0);
+    mfb_set_target_fps(240);
+    mfb_set_keyboard_callback(window, keyboard_callback);
 
     zeroWire = 0;
 
