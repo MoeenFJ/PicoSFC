@@ -890,10 +890,15 @@ public:
             uint16 mainLine[256] = {0};
             uint16 subLine[256] = {0};
             uint8 prior[256] = {0};
+            bool addSubable[256] = {0};
 
             // Apply backdrop by default
             for (int i = 0; i < 256; i++)
-                mainLine[i] = subLine[i] = cgram[0];
+            {
+                mainLine[i] = cgram[0];
+                addSubable[i] = bdpAddSub;
+                subLine[i] = constColor;
+            }
 
             // Handle objects
 
@@ -992,7 +997,11 @@ public:
                         uint16 col = cgram[0b10000000 | (objs[i].objClrPal << 4) | colorIdx];
 
                         if (OBJonMainScreen)
+                        {
                             mainLine[hCnt] = col;
+                            if (objs[i].objClrPal >= 4)
+                                addSubable[hCnt] = objAddSub;
+                        }
                         if (OBJonSubScreen)
                             subLine[hCnt] = col;
                         prior[hCnt] = tPrior;
@@ -1104,7 +1113,10 @@ public:
                     }
 
                     if (BG1onMainScreen)
+                    {
                         mainLine[hCnt] = col;
+                        addSubable[hCnt] = bg1AddSub;
+                    }
                     if (BG1onSubScreen)
                         subLine[hCnt] = col;
                     prior[hCnt] = tPrior;
@@ -1122,6 +1134,8 @@ public:
                 int16_t D = mode7D;
                 for (int hCnt = 0; hCnt < 256; hCnt++)
                 {
+                    if (prior[hCnt] > 3)
+                        continue;
                     uint16 vOffset = ((vCounter << interlacing) + BG1VScroll);
                     uint16 hOffset = (hCnt + BG1HScroll);
 
@@ -1156,10 +1170,13 @@ public:
                         continue;
 
                     if (BG1onMainScreen)
+                    {
                         mainLine[hCnt] = directColor ? colorIdx : cgram[colorIdx];
+                        addSubable[hCnt] = bg1AddSub;
+                    }
                     if (BG1onSubScreen)
                         subLine[hCnt] = directColor ? colorIdx : cgram[colorIdx];
-                    // prior[hCnt] = bg1prior;
+                    prior[hCnt] = 3;
                 }
             }
 
@@ -1258,7 +1275,10 @@ public:
                     }
 
                     if (BG2onMainScreen)
+                    {
                         mainLine[hCnt] = cgram[colAdd];
+                        addSubable[hCnt] = bg2AddSub;
+                    }
                     if (BG2onSubScreen)
                         subLine[hCnt] = cgram[colAdd];
                     prior[hCnt] = tPrior;
@@ -1325,7 +1345,10 @@ public:
                     colAdd = pal << 2 | colorIdx; // + offsets for other BGs
 
                     if (BG3onMainScreen)
+                    {
                         mainLine[hCnt] = cgram[colAdd];
+                        addSubable[hCnt] = bg3AddSub;
+                    }
                     if (BG3onSubScreen)
                         subLine[hCnt] = cgram[colAdd];
                     prior[hCnt] = tPrior;
@@ -1390,7 +1413,10 @@ public:
                     colAdd = pal << 2 | colorIdx; // + offsets for other BGs
 
                     if (BG4onMainScreen)
+                    {
                         mainLine[hCnt] = cgram[colAdd];
+                        addSubable[hCnt] = bg4AddSub;
+                    }
                     if (BG4onSubScreen)
                         subLine[hCnt] = cgram[colAdd];
                     prior[hCnt] = tPrior;
@@ -1404,28 +1430,43 @@ public:
             for (int hCnt = 0; hCnt < 256; hCnt++)
             {
                 uint16 selectedCol = constColorSel ? constColor : subLine[hCnt];
-                uint8 R = (selectedCol & 0b0000000000011111) >> 0;
-                uint8 G = (selectedCol & 0b0000001111100000) >> 5;
-                uint8 B = (selectedCol & 0b0111110000000000) >> 10;
+                int16_t R = (selectedCol & 0b0000000000011111) >> 0;
+                int16_t G = (selectedCol & 0b0000001111100000) >> 5;
+                int16_t B = (selectedCol & 0b0111110000000000) >> 10;
 
                 mainR = ((mainLine[hCnt] & 0b0000000000011111) >> 0);
                 mainG = ((mainLine[hCnt] & 0b0000001111100000) >> 5);
                 mainB = ((mainLine[hCnt] & 0b0111110000000000) >> 10);
 
-                // mainR = mainR + (addSub ? -R : R);
-                // mainR = mainR > 31 ? 31 : mainR;
-                // mainR = mainR < 0 ? 0 : mainR;
-                // mainR = mainR >> (addSubHalf ? 1 : 0);
+                if (addSubable[hCnt])
+                {
+                    
+                    mainR = (mainR + (addSub ? -R : R)) / (addSubHalf ? 2 : 1);
+                    mainR = mainR > 31 ? 31 : mainR;
+                    mainR = mainR < 0 ? 0 : mainR;
 
-                // mainG = mainG + (addSub ? -G : G);
-                // mainG = mainG > 31 ? 31 : mainG;
-                // mainG = mainG < 0 ? 0 : mainG;
-                // mainG = mainG >> (addSubHalf ? 1 : 0);
+                    mainG = (mainG + (addSub ? -G : G)) / (addSubHalf ? 2 : 1);
+                    mainG = mainG > 31 ? 31 : mainG;
+                    mainG = mainG < 0 ? 0 : mainG;
 
-                // mainB = mainB + (addSub ? -B : B);
-                // mainB = mainB > 31 ? 31 : mainB;
-                // mainB = mainB < 0 ? 0 : mainB;
-                // mainB = mainB >> (addSubHalf ? 1 : 0);
+                    mainB = (mainB + (addSub ? -B : B)) / (addSubHalf ? 2 : 1);
+                    mainB = mainB > 31 ? 31 : mainB;
+                    mainB = mainB < 0 ? 0 : mainB;
+                }
+                else
+                {
+                    mainR = (mainR + (addSub ? -R : R));
+                    mainR = mainR > 31 ? 31 : mainR;
+                    mainR = mainR < 0 ? 0 : mainR;
+
+                    mainG = (mainG + (addSub ? -G : G));
+                    mainG = mainG > 31 ? 31 : mainG;
+                    mainG = mainG < 0 ? 0 : mainG;
+
+                    mainB = (mainB + (addSub ? -B : B));
+                    mainB = mainB > 31 ? 31 : mainB;
+                    mainB = mainB < 0 ? 0 : mainB;
+                }
 
                 uint8 fade = ((15 - fadeValue) << 4);
                 mainR = (mainR << 3);

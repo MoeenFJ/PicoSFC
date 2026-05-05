@@ -134,7 +134,7 @@ void emu()
         if (!dma->dmaActive)
         {
 
-            if (emuStep % 16 == 0)
+            if (emuStep % 8 == 0)
             {
                 runInst = false;
                 if (debug)
@@ -156,7 +156,7 @@ void emu()
             }
         }
 
-        if (emuStep % 1 == 0)
+        if (emuStep % 2 == 0)
         {
             auto start = chrono::steady_clock::now();
             dma->step(!hdmaRan);
@@ -1121,6 +1121,7 @@ int main(int argc, char *argv[])
     cpuTraceFile = ofstream("CPUTrace.txt");
 
     window = mfb_open_ex("MTOSFC", WIN_WIDTH, WIN_HEIGHT, NULL);
+    mfb_set_target_fps(240);  
     mfb_set_keyboard_callback(window, keyboard_callback);
     mfb_set_mouse_button_callback(window, mouse_btn_callback);
     mfb_set_mouse_move_callback(window, mouse_move_callback);
